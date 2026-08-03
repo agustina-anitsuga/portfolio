@@ -51,8 +51,6 @@ cp setkeys.example.txt setkeys.txt
 source setkeys.txt
 ```
 
-`setkeys.txt` esta en `.gitignore`, asi que tus claves no se commitean.
-
 Sin credenciales el script igual corre: usa los fallbacks de precio.
 
 ### Orden de fallback de precios
@@ -78,3 +76,7 @@ python3 generar_dashboard_ppi.py portfolio.xlsx --out-html portfolio.html
 | `portfolio.xlsx` | Planilla de transacciones (entrada) |
 | `portfolio.html` | Dashboard generado (salida) |
 | `setkeys.example.txt` | Plantilla de credenciales PPI |
+
+> `portfolio.xlsx` y `portfolio.html` son datos de ejemplo, no posiciones
+> reales: sirven de referencia del formato esperado. Reemplaza el `.xlsx` por
+> tu propia planilla para generar tu dashboard.
