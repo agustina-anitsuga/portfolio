@@ -306,29 +306,45 @@ def load_config(wb):
     return {"manual_fx": manual_fx}
 
 
-def _year_of(v):
-    """Anio ('2024') de una fecha de transaccion, o None si no se puede leer.
-    Se devuelve como string para que compare directo contra el value de un
-    <select> en el HTML, sin casteos del lado del JS.
+def _parse_date(v):
+    """(anio, mes, dia) de una fecha de transaccion, o None si no se puede leer.
 
     Las hojas mezclan formatos segun como se cargo cada fila: celdas de fecha
-    reales, ISO ('2026-11-06') y dd/mm/aaaa ('30/09/2025'), asi que hay que
-    contemplar los tres."""
+    reales de Excel, ISO ('2026-11-06') y dd/mm/aaaa ('30/09/2025'), asi que
+    hay que contemplar los tres. Cuando la fecha viene como texto y NO empieza
+    con el anio, se asume dia primero (formato local), que es como estan
+    cargadas las hojas.
+    """
     if v is None:
         return None
     if isinstance(v, (dt.datetime, dt.date)):
-        return str(v.year)
+        return (v.year, v.month, v.day)
     s = str(v).strip()
     if not s:
         return None
-    if s[:4].isdigit():
-        return s[:4]
+    s = s.split()[0]  # descarta la hora si viene pegada ('2025-01-15 00:00:00')
     for sep in ("/", "-", "."):
         s = s.replace(sep, " ")
     parts = s.split()
-    if parts and len(parts[-1]) == 4 and parts[-1].isdigit():
-        return parts[-1]
-    return None
+    if len(parts) < 3 or not all(p.isdigit() for p in parts[:3]):
+        return None
+    a, b, c = (int(p) for p in parts[:3])
+    if len(parts[0]) == 4:
+        year, month, day = a, b, c      # ISO: aaaa mm dd
+    else:
+        day, month, year = a, b, c      # local: dd mm aaaa
+    if year < 100:
+        return None                     # anio de 2 digitos: ambiguo, se descarta
+    if not (1 <= month <= 12 and 1 <= day <= 31):
+        return None
+    return (year, month, day)
+
+
+def _year_of(v):
+    """Anio ('2024') de una fecha, o None. Se devuelve como string para que
+    compare directo contra el value de un <select> en el HTML."""
+    parsed = _parse_date(v)
+    return str(parsed[0]) if parsed else None
 
 
 def load_dual_positions(rows, native, fx_rate):
@@ -474,11 +490,16 @@ def load_all_positions(wb, fx_rate):
 
 
 def _fmt_date(v):
+    """Fecha SIEMPRE como YYYY-MM-DD. Es lo que hace que la columna "Fecha"
+    ordene bien: la tabla ordena strings, y en ese formato el orden
+    alfabetico coincide con el cronologico. Si la hoja trae dd/mm/aaaa y se
+    dejara asi, mezclado con las filas en ISO, el orden salia mal."""
     if v is None:
         return ""
-    if isinstance(v, (dt.datetime, dt.date)):
-        return v.strftime("%Y-%m-%d")
-    return str(v)
+    parsed = _parse_date(v)
+    if parsed is None:
+        return str(v)  # formato no reconocido: se muestra tal cual vino
+    return "%04d-%02d-%02d" % parsed
 
 
 def collect_transactions(wb):
