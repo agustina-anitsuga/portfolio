@@ -8,7 +8,7 @@ una planilla de transacciones, consultando precios en vivo con la API de
 
 Lee una planilla Excel con las hojas `instrumentos`, `config`, `tx-usd`,
 `tx-cedears`, `tx-merval` y `tx-rsu`, y produce un HTML autocontenido con una
-pestana por tipo de instrumento (US Stocks, Cedears, Acciones Merval, RSU JPM,
+pestana por tipo de instrumento (US Stocks, Cedears, Acciones Merval, RSU,
 Bonos), mas una pestana general y una de transacciones.
 
 Cada pestana muestra:
@@ -17,8 +17,13 @@ Cada pestana muestra:
   P&L en $ y en %, **todo en pesos (ARS) y en dolares (USD) a la vez**.
 - Tratamiento de ventas: unidades vendidas, costo de ventas, ingreso de ventas
   y P&L realizado, tambien en ambas monedas.
-- Buscador, filtro por sector, por tipo de instrumento y por moneda, columnas
-  ordenables por click, y graficos.
+- Buscador, filtro por sector, por tipo de instrumento, por anio de compra y
+  por moneda, columnas ordenables por click, y graficos.
+
+El filtro de **anio de compra** esta en todas las pestanas y solo lista anios
+en los que hubo compras. Una posicion comprada en varios anios aparece en cada
+uno de ellos y se muestra entera: el filtro responde "que compre en 2024", no
+"cuanto de lo que tengo hoy corresponde a 2024".
 
 ### Conversion ARS / USD
 
@@ -43,12 +48,11 @@ fallback de Yahoo Finance.
 
 1. Entra a tu cuenta de PPI → Gestiones → Gestion de servicio API → activar.
 2. Vas a obtener una Public Key y una Private Key.
-3. Copia `setkeys.example.txt` a `setkeys.txt`, completa las claves y cargalas:
+3. Completa las claves y cargalas en tu entorno:
 
 ```bash
-cp setkeys.example.txt setkeys.txt
-# editar setkeys.txt con tus claves
-source setkeys.txt
+export PPI_PUBLIC_KEY=""
+export PPI_PRIVATE_KEY=""
 ```
 
 Sin credenciales el script igual corre: usa los fallbacks de precio.
@@ -75,7 +79,6 @@ python3 generar_dashboard_ppi.py portfolio.xlsx --out-html portfolio.html
 | `generar_dashboard_ppi.py` | Script generador del dashboard |
 | `portfolio.xlsx` | Planilla de transacciones (entrada) |
 | `portfolio.html` | Dashboard generado (salida) |
-| `setkeys.example.txt` | Plantilla de credenciales PPI |
 
 > `portfolio.xlsx` y `portfolio.html` son datos de ejemplo, no posiciones
 > reales: sirven de referencia del formato esperado. Reemplaza el `.xlsx` por

@@ -7,16 +7,22 @@ Lee "Portfolio - Transacciones.xlsx" (hojas: instrumentos, config, tx-usd,
 tx-cedears, tx-merval, tx-rsu), consulta precios actuales via la API de PPI
 (Portfolio Personal Inversiones) y genera "Portfolio Dashboard.html": un
 dashboard interactivo con una pestana por tipo de instrumento (US Stocks,
-Cedears, Acciones Merval, RSU JPM) mas una general, cada una con:
+Cedears, Acciones Merval, RSU) mas una general, cada una con:
 
   - precio promedio de compra, precio actual, dinero invertido, valor
     actual, P&L $ y P&L % -- TODO en pesos (ARS) y en dolares (USD) a la vez.
   - tratamiento de ventas: unidades vendidas, costo de ventas, ingreso de
     ventas, P&L realizado $ y %, tambien en ambas monedas.
-  - buscador, filtro por sector, filtro por tipo de instrumento (Stock/ETF)
-    y filtro por moneda a mostrar, columnas ordenables por click, y graficos.
+  - buscador, filtro por sector, filtro por tipo de instrumento (Stock/ETF),
+    filtro por anio de compra y filtro por moneda a mostrar, columnas
+    ordenables por click, y graficos.
 
-  RSU JPM se trata exactamente igual que los demas portfolios (misma logica
+  El filtro de anio de compra esta en todas las pestanas y lista solo los
+  anios en los que efectivamente hubo compras. Una posicion con compras en
+  varios anios aparece en cada uno de esos anios, y se muestra completa (no
+  se prorratea al tramo comprado ese anio).
+
+  RSU se trata exactamente igual que los demas portfolios (misma logica
   de costo promedio, P&L, dual-moneda); solo cambia que la hoja de origen es
   "tx-rsu" en vez de "tx-usd".
 
@@ -106,7 +112,7 @@ PPI_SANDBOX = os.environ.get("PPI_SANDBOX", "false").lower() == "true"
 MARKETS = ["usd", "cedears", "merval", "rsu", "bonds"]
 # native currency actually quoted/traded for each market
 NATIVE_CURRENCY = {"usd": "usd", "cedears": "ars", "merval": "ars", "rsu": "usd", "bonds": "ars"}
-MARKET_LABELS = {"usd": "US Stocks", "cedears": "Cedears", "merval": "Acciones Merval", "rsu": "RSU JPM", "bonds": "Bonos"}
+MARKET_LABELS = {"usd": "US Stocks", "cedears": "Cedears", "merval": "Acciones Merval", "rsu": "RSU", "bonds": "Bonos"}
 
 
 # ---------------------------------------------------------------------------
@@ -300,11 +306,38 @@ def load_config(wb):
     return {"manual_fx": manual_fx}
 
 
+def _year_of(v):
+    """Anio ('2024') de una fecha de transaccion, o None si no se puede leer.
+    Se devuelve como string para que compare directo contra el value de un
+    <select> en el HTML, sin casteos del lado del JS.
+
+    Las hojas mezclan formatos segun como se cargo cada fila: celdas de fecha
+    reales, ISO ('2026-11-06') y dd/mm/aaaa ('30/09/2025'), asi que hay que
+    contemplar los tres."""
+    if v is None:
+        return None
+    if isinstance(v, (dt.datetime, dt.date)):
+        return str(v.year)
+    s = str(v).strip()
+    if not s:
+        return None
+    if s[:4].isdigit():
+        return s[:4]
+    for sep in ("/", "-", "."):
+        s = s.replace(sep, " ")
+    parts = s.split()
+    if parts and len(parts[-1]) == 4 and parts[-1].isdigit():
+        return parts[-1]
+    return None
+
+
 def load_dual_positions(rows, native, fx_rate):
     """Average-cost method tracking BOTH currencies at once, per transaction.
 
-    rows: iterable of (key, op, units, amount_native, amount_other_or_None).
+    rows: iterable of (key, op, units, amount_native, amount_other_or_None, date).
     `native` is 'ars' or 'usd' -- the currency amount_native is denominated in.
+    `date` solo se usa para registrar en que anios se compro la posicion
+    (filtro "Anio de compra" del dashboard); no afecta ningun calculo.
 
     When a transaction has a real recorded amount in the other currency
     (e.g. tx-cedears always has both @Local and @Origin; tx-merval has both
@@ -317,7 +350,7 @@ def load_dual_positions(rows, native, fx_rate):
     """
     other = "usd" if native == "ars" else "ars"
     positions = {}
-    for key, op, units, amt_native, amt_other in rows:
+    for key, op, units, amt_native, amt_other, date in rows:
         if not key or not op or units is None:
             continue
         pos = positions.setdefault(key, {
@@ -325,7 +358,7 @@ def load_dual_positions(rows, native, fx_rate):
             "cost_basis_ars": 0.0, "cost_basis_usd": 0.0,
             "cost_of_sales_ars": 0.0, "cost_of_sales_usd": 0.0,
             "income_from_sales_ars": 0.0, "income_from_sales_usd": 0.0,
-            "approx_used": False,
+            "approx_used": False, "buy_years": set(),
         })
         units = float(units)
         amt_native = float(amt_native) if amt_native is not None else 0.0
@@ -344,6 +377,9 @@ def load_dual_positions(rows, native, fx_rate):
             pos["units"] += units
             pos["cost_basis_ars"] += amounts["ars"]
             pos["cost_basis_usd"] += amounts["usd"]
+            year = _year_of(date)
+            if year:
+                pos["buy_years"].add(year)
         elif op == "SELL":
             avg_ars = pos["cost_basis_ars"] / pos["units"] if pos["units"] > 1e-9 else 0.0
             avg_usd = pos["cost_basis_usd"] / pos["units"] if pos["units"] > 1e-9 else 0.0
@@ -361,6 +397,7 @@ def load_dual_positions(rows, native, fx_rate):
     out = {}
     for k, p in positions.items():
         p["dual_real"] = not p.pop("approx_used")
+        p["buy_years"] = sorted(p["buy_years"])
         out[k] = p
     return out
 
@@ -379,7 +416,7 @@ def load_all_positions(wb, fx_rate):
     # you recorded the real ARS you paid. Historic tx-usd rows never had
     # this, so those fall back to today's fx_rate (flagged in the UI).
     out["usd"] = load_dual_positions(
-        ((r[0], r[1], r[2], r[5], _col(r, 6)) for r in tx_usd_rows),
+        ((r[0], r[1], r[2], r[5], _col(r, 6), _col(r, 3)) for r in tx_usd_rows),
         native="usd", fx_rate=fx_rate,
     )
 
@@ -391,7 +428,7 @@ def load_all_positions(wb, fx_rate):
     # hit earlier where multiplying USD price by local unit count without
     # dividing by Ratio inflated results ~60x.
     out["cedears"] = load_dual_positions(
-        ((r[0], r[1], r[2], r[4], r[6]) for r in tx_ced_rows),
+        ((r[0], r[1], r[2], r[4], r[6], _col(r, 3)) for r in tx_ced_rows),
         native="ars", fx_rate=fx_rate,
     )
 
@@ -402,7 +439,7 @@ def load_all_positions(wb, fx_rate):
     # already computed historically (Total amount ARS / USD-ARS rate on the
     # day of the trade), so it's real, not an approximation.
     out["merval"] = load_dual_positions(
-        ((r[0], r[1], r[2], r[5], _col(r, 6)) for r in tx_mer_rows),
+        ((r[0], r[1], r[2], r[5], _col(r, 6), _col(r, 3)) for r in tx_mer_rows),
         native="ars", fx_rate=fx_rate,
     )
 
@@ -413,7 +450,7 @@ def load_all_positions(wb, fx_rate):
         # presente (costo base = FMV al momento del vesting), col6 = Total
         # amount (ARS) opcional.
         out["rsu"] = load_dual_positions(
-            ((r[0], r[1], r[2], r[5], _col(r, 6)) for r in tx_rsu_rows),
+            ((r[0], r[1], r[2], r[5], _col(r, 6), _col(r, 3)) for r in tx_rsu_rows),
             native="usd", fx_rate=fx_rate,
         )
     else:
@@ -427,7 +464,7 @@ def load_all_positions(wb, fx_rate):
         # y liquidan en las dos monedas en BYMA, asi que ambos montos vienen
         # de la operacion real, no aproximados).
         out["bonds"] = load_dual_positions(
-            ((r[0], r[1], r[2], r[5], _col(r, 6)) for r in tx_bonds_rows),
+            ((r[0], r[1], r[2], r[5], _col(r, 6), _col(r, 3)) for r in tx_bonds_rows),
             native="ars", fx_rate=fx_rate,
         )
     else:
@@ -465,6 +502,7 @@ def collect_transactions(wb):
             amt_usd = float(amt_usd) if amt_usd is not None else None
             txs.append({
                 "ticker": key, "market": market, "op": op, "date": _fmt_date(date),
+                "year": _year_of(date),
                 "units": u, "amount_ars": amt_ars, "amount_usd": amt_usd,
                 "price_ars": (amt_ars / u) if (amt_ars is not None and u) else None,
                 "price_usd": (amt_usd / u) if (amt_usd is not None and u) else None,
@@ -566,6 +604,7 @@ def build_market_report(market, positions, meta, fx_rate):
             "sector": m.get("sector") or "-", "ratio": m.get("ratio") or "",
             "instrument_type": m.get("instrument_type") or "-",
             "units": units, "units_sold": pos["units_sold"], "trend_30d": trend,
+            "buy_years": pos.get("buy_years", []),
             "price_source": source, "fx_approx": not pos["dual_real"],
             "native_currency": NATIVE_CURRENCY[market],
             "price_debug_note": price_debug_note,
@@ -963,7 +1002,7 @@ document.getElementById('fxBar').textContent = DATA.fx_rate
   : `Tipo de cambio no disponible (${DATA.fx_source}) -- las columnas convertidas quedan vacías`;
 
 const MARKET_KEYS = ['general', 'usd', 'cedears', 'merval', 'rsu', 'bonds', 'tx'];
-const TAB_LABELS = { general: 'General', usd: 'US Stocks', cedears: 'Cedears', merval: 'Acciones Merval', rsu: 'RSU JPM', bonds: 'Bonos', tx: 'Transacciones' };
+const TAB_LABELS = { general: 'General', usd: 'US Stocks', cedears: 'Cedears', merval: 'Acciones Merval', rsu: 'RSU', bonds: 'Bonos', tx: 'Transacciones' };
 
 // portfolios "reales" (no general/tx) -- para armar los totales combinados
 // de la pestana General sin repetir la lista en cada lugar.
@@ -1038,15 +1077,31 @@ function getCols(marketKey) {
   return [...COLUMNS_BASE, ...COLUMNS_DUAL];
 }
 
+// Filas de un portfolio tal como las ve la pestana general: completas, o
+// solo las compradas en el anio elegido si ese filtro esta activo. Los KPIs
+// de la general se recalculan desde aca (en vez de usar los precalculados de
+// DATA.markets[m].kpis) para que respeten el filtro de anio.
+function generalMarketRows(m) {
+  const year = currentYear('general');
+  const rows = DATA.markets[m].rows;
+  return year ? rows.filter(r => matchesBuyYear(r, year)) : rows;
+}
+
+function _unpricedCount(rows) {
+  // mismo criterio que _market_kpis() en Python: sin valor en ninguna moneda.
+  return rows.filter(r => r.value_ars === null && r.value_usd === null).length;
+}
+
 function buildGeneralRows(currency) {
   const totalValue = computeGeneralTotals(currency).value;
   return PORTFOLIO_KEYS.map(m => {
-    const k = DATA.markets[m].kpis[currency];
+    const rows = generalMarketRows(m);
+    const k = computeMarketKpis(rows, currency);
     return {
       label: TAB_LABELS[m],
       market: m,
-      count: DATA.markets[m].rows.length,
-      unpriced: DATA.markets[m].kpis.unpriced,
+      count: rows.length,
+      unpriced: _unpricedCount(rows),
       invested: k.invested, value: k.value,
       pct_portfolio: totalValue ? (k.value / totalValue * 100) : null,
       pl_abs: k.pl_abs,
@@ -1058,7 +1113,7 @@ function buildGeneralRows(currency) {
 // Totales combinados de los 3 portfolios, para las pills de arriba de la
 // pestana general (mismo total que antes mostraba la fila "Total").
 function computeGeneralTotals(currency) {
-  const parts = PORTFOLIO_KEYS.map(m => DATA.markets[m].kpis[currency]);
+  const parts = PORTFOLIO_KEYS.map(m => computeMarketKpis(generalMarketRows(m), currency));
   const invested = parts.reduce((s, k) => s + (k.invested || 0), 0);
   const value = parts.reduce((s, k) => s + (k.value || 0), 0);
   const pl_abs = value - invested;
@@ -1068,7 +1123,7 @@ function computeGeneralTotals(currency) {
 }
 
 function computeGeneralUnpriced() {
-  return PORTFOLIO_KEYS.reduce((s, m) => s + DATA.markets[m].kpis.unpriced, 0);
+  return PORTFOLIO_KEYS.reduce((s, m) => s + _unpricedCount(generalMarketRows(m)), 0);
 }
 
 function _sumOrNone(rows, key) {
@@ -1124,6 +1179,32 @@ function uniqueSorted(rows, key) {
   return [...new Set(rows.map(r => r[key]).filter(v => v !== null && v !== undefined && v !== ''))].sort();
 }
 
+// Anios en los que se compro algo, del mas reciente al mas viejo. Una
+// posicion puede tener compras en varios anios, asi que buy_years es una
+// lista por fila y hay que aplanarla antes de deduplicar.
+function uniqueYears(rows) {
+  return [...new Set(rows.flatMap(r => r.buy_years || []))].sort().reverse();
+}
+
+// Anios con compras en cualquier portfolio: lo usan la pestana general y la
+// de transacciones, que no corresponden a un solo tipo de instrumento.
+function allBuyYears() {
+  return uniqueYears(PORTFOLIO_KEYS.flatMap(m => DATA.markets[m].rows));
+}
+
+function yearSelectHtml(marketKey, years) {
+  return `<select data-role="year" data-market="${marketKey}">
+        <option value="">Todos los anios</option>
+        ${years.map(y => `<option value="${y}">Comprado en ${y}</option>`).join('')}
+      </select>`;
+}
+
+// Anio seleccionado en esa pestana ('' = sin filtrar).
+function currentYear(marketKey) {
+  const el = document.querySelector(`[data-role="year"][data-market="${marketKey}"]`);
+  return el ? el.value : '';
+}
+
 function buildPage(marketKey) {
   const isGeneral = marketKey === 'general';
   const isTx = marketKey === 'tx';
@@ -1143,6 +1224,7 @@ function buildPage(marketKey) {
         <option value="">Todos los portfolios</option>
         ${typeOptions.map(t => `<option value="${t}">${TAB_LABELS[t]}</option>`).join('')}
       </select>
+      ${yearSelectHtml(marketKey, allBuyYears())}
       <span class="count" data-role="count" data-market="${marketKey}"></span>
     </div>`;
   } else if (isGeneral) {
@@ -1156,6 +1238,7 @@ function buildPage(marketKey) {
       html += `<div class="approx-note">Uno o mas portfolios tienen posiciones con montos aproximados en la moneda no nativa (se convirtieron al tipo de cambio de HOY para esa operacion puntual, no historico). Mira el detalle en la pestana de cada tipo de instrumento.</div>`;
     }
     html += `<div class="toolbar">
+      ${yearSelectHtml(marketKey, allBuyYears())}
       <select data-role="currency" data-market="${marketKey}">
         <option value="ars" ${defaultCurrency==='ars'?'selected':''}>Moneda: ARS</option>
         <option value="usd" ${defaultCurrency==='usd'?'selected':''}>Moneda: USD</option>
@@ -1186,6 +1269,7 @@ function buildPage(marketKey) {
         <option value="">Todos los tipos</option>
         ${instTypeOptions.map(t => `<option value="${t}">${t}</option>`).join('')}
       </select>
+      ${yearSelectHtml(marketKey, uniqueYears(rows))}
       <select data-role="currency" data-market="${marketKey}">
         <option value="ars" ${defaultCurrency==='ars'?'selected':''}>Moneda: ARS</option>
         <option value="usd" ${defaultCurrency==='usd'?'selected':''}>Moneda: USD</option>
@@ -1305,9 +1389,13 @@ function filterRows(marketKey) {
     const typeEl = document.querySelector(`[data-role="type"][data-market="tx"]`);
     const search = (searchEl.value || '').toLowerCase();
     const type = typeEl.value;
+    // aca cada fila ES una operacion, asi que el filtro de anio se aplica
+    // sobre la fecha de la operacion misma.
+    const year = currentYear('tx');
     return DATA.transactions.filter(r => {
       if (search && !r.ticker.toLowerCase().includes(search)) return false;
       if (type && r.market !== type) return false;
+      if (year && r.year !== year) return false;
       return true;
     });
   }
@@ -1318,12 +1406,22 @@ function filterRows(marketKey) {
   const search = (searchEl.value || '').toLowerCase();
   const sector = sectorEl.value;
   const instType = instTypeEl ? instTypeEl.value : '';
+  const year = currentYear(marketKey);
   return allRows.filter(r => {
     if (search && !(`${r.key} ${r.name}`.toLowerCase().includes(search))) return false;
     if (sector && r.sector !== sector) return false;
     if (instType && r.instrument_type !== instType) return false;
+    if (year && !matchesBuyYear(r, year)) return false;
     return true;
   });
+}
+
+// Una posicion pasa el filtro si tuvo AL MENOS UNA compra en ese anio. Se
+// muestra entera (todas las unidades y todo el P&L), no prorrateada al
+// tramo comprado ese anio: el filtro responde "que compre en 2024", no
+// "cuanto de lo que tengo hoy corresponde a 2024".
+function matchesBuyYear(row, year) {
+  return (row.buy_years || []).includes(year);
 }
 
 function applyFilters(marketKey, cols) {
@@ -1418,6 +1516,13 @@ function initPage(marketKey) {
       .addEventListener('change', () => applyFilters(marketKey, cols));
     document.querySelector(`[data-role="insttype"][data-market="${marketKey}"]`)
       .addEventListener('change', () => applyFilters(marketKey, cols));
+  }
+
+  // el filtro de anio existe en las tres clases de pestana (general, por tipo
+  // de instrumento y transacciones), asi que se cablea una sola vez aca.
+  const yearEl = document.querySelector(`[data-role="year"][data-market="${marketKey}"]`);
+  if (yearEl) {
+    yearEl.addEventListener('change', () => applyFilters(marketKey, cols));
   }
 
   const currencyEl = document.querySelector(`[data-role="currency"][data-market="${marketKey}"]`);

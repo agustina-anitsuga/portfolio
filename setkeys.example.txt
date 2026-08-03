@@ -1,2 +1,0 @@
-export PPI_PUBLIC_KEY=""
-export PPI_PRIVATE_KEY=""
