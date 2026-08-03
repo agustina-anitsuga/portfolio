@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Portfolio Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg:#0f1115; --card:#171a21; --border:#262b36; --text:#e7e9ee; --muted:#9aa2b1;
+    --green:#3ddc84; --red:#ff5c5c; --accent:#6ea8fe; --hover:#1d212b;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+         background:var(--bg); color:var(--text); padding:28px 32px 60px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:8px; }
+  .fxbar { color:var(--muted); font-size:12px; margin-bottom:20px; background:var(--card);
+           border:1px solid var(--border); border-radius:8px; padding:8px 14px; display:inline-block; }
+  .tabs { display:flex; gap:6px; margin-bottom:20px; border-bottom:1px solid var(--border); }
+  .tab { padding:10px 18px; cursor:pointer; color:var(--muted); font-size:14px; border-bottom:2px solid transparent; }
+  .tab.active { color:var(--text); border-bottom-color:var(--accent); font-weight:600; }
+  .page { display:none; }
+  .page.active { display:block; }
+  .kpi-title { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin:0 0 8px; }
+  .kpis { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+  .kpi { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px 16px; min-width:130px; flex:1; }
+  .kpi .label { color:var(--muted); font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; }
+  .kpi .val { font-size:18px; font-weight:600; margin-top:4px; }
+  .pos { color:var(--green); } .neg { color:var(--red); }
+  .unpriced-note { color:var(--muted); font-size:12px; margin-bottom:6px; }
+  .approx-note { color:var(--muted); font-size:11.5px; margin:-4px 0 16px; font-style:italic; }
+  .charts { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:22px; }
+  .chart-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; flex:1; min-width:320px; max-width:480px; height:300px; }
+  .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+  .toolbar input, .toolbar select {
+    background:var(--card); border:1px solid var(--border); color:var(--text);
+    padding:8px 12px; border-radius:8px; font-size:13px;
+  }
+  .toolbar input { min-width:220px; }
+  .count { color:var(--muted); font-size:12px; margin-left:auto; }
+  table { border-collapse:collapse; width:100%; background:var(--card); border-radius:12px; overflow:hidden; font-size:12.5px; }
+  th, td { padding:8px 11px; text-align:right; border-bottom:1px solid var(--border); white-space:nowrap; }
+  th:nth-child(1), td:nth-child(1), th:nth-child(2), td:nth-child(2) { text-align:left; white-space:normal; }
+  th { color:var(--muted); font-weight:500; text-transform:uppercase; font-size:10px; letter-spacing:.03em;
+       cursor:pointer; user-select:none; position:sticky; top:0; background:var(--card); }
+  th:hover { color:var(--text); }
+  th.sorted-asc::after { content:" \25B2"; font-size:9px; }
+  th.sorted-desc::after { content:" \25BC"; font-size:9px; }
+  tr:hover td { background:var(--hover); }
+  tr:last-child td { border-bottom:none; }
+  .tag { font-size:10px; padding:2px 6px; border-radius:4px; background:#232838; color:var(--muted); }
+  .tag.live { color:var(--green); background:#123822; }
+  .ticker-link { cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px; }
+  .ticker-link:hover { color:var(--accent); }
+  tr.total-row td { font-weight:700; border-top:2px solid var(--accent); background:#161c2c; }
+  tr.row-link { cursor:pointer; }
+  .table-wrap { max-height:560px; overflow:auto; border-radius:12px; }
+  input.hscroll {
+    -webkit-appearance:none; appearance:none; width:100%; height:6px; margin:10px 0 4px;
+    background:var(--border); border-radius:4px; outline:none; cursor:pointer;
+  }
+  input.hscroll:disabled { opacity:.3; cursor:default; }
+  input.hscroll::-webkit-slider-thumb {
+    -webkit-appearance:none; appearance:none; width:16px; height:16px; border-radius:50%;
+    background:var(--accent); cursor:pointer; border:2px solid var(--bg);
+  }
+  input.hscroll::-moz-range-thumb {
+    width:16px; height:16px; border-radius:50%; background:var(--accent); cursor:pointer;
+    border:2px solid var(--bg);
+  }
+  input.hscroll::-moz-range-track { background:var(--border); height:6px; border-radius:4px; }
+</style>
+</head>
+<body>
+  <h1>Portfolio Dashboard</h1>
+  <div class="sub" id="generatedAt"></div>
+  <div class="fxbar" id="fxBar"></div>
+  <div class="tabs" id="tabs"></div>
+  <div id="pages"></div>
+
+<script>
+const DATA = {"markets": {"usd": {"label": "US Stocks", "kpis": {"ars": {"invested": 171841.5808, "value": 168882.89929917976, "pl_abs": -2958.6815008202393, "pl_pct": -1.7217494665995525, "realized": 0.0}, "usd": {"invested": 116.26, "value": 111.23999786376953, "pl_abs": -5.020002136230474, "pl_pct": -4.317909974394008, "realized": 0.0}, "unpriced": 0}, "rows": [{"key": "BTC", "market": "usd", "name": "Grayscale Bitcoin Mini Trust ETF", "sector": "Crypto Assets", "ratio": 1, "instrument_type": "ETF", "units": 4.0, "units_sold": 0.0, "trend_30d": null, "price_source": "Yahoo Finance", "fx_approx": false, "native_currency": "usd", "price_debug_note": null, "avg_cost_ars": 42960.3952, "price_ars": 42220.72482479494, "invested_ars": 171841.5808, "value_ars": 168882.89929917976, "pl_abs_ars": -2958.6815008202393, "pl_pct_ars": -1.7217494665995525, "cost_of_sales_ars": 0.0, "income_from_sales_ars": 0.0, "realized_abs_ars": 0.0, "realized_pct_ars": null, "avg_cost_usd": 29.065, "price_usd": 27.809999465942383, "invested_usd": 116.26, "value_usd": 111.23999786376953, "pl_abs_usd": -5.020002136230474, "pl_pct_usd": -4.317909974394008, "cost_of_sales_usd": 0.0, "income_from_sales_usd": 0.0, "realized_abs_usd": 0.0, "realized_pct_usd": null, "pct_portfolio_ars": 100.0, "pct_portfolio_usd": 100.0}]}, "cedears": {"label": "Cedears", "kpis": {"ars": {"invested": 770322.2539499999, "value": 885600.0, "pl_abs": 115277.74605000007, "pl_pct": 14.964872877407814, "realized": 0.0}, "usd": {"invested": 499.635, "value": 583.3281079195256, "pl_abs": 83.69310791952557, "pl_pct": 16.75084970418917, "realized": 0.0}, "unpriced": 0}, "rows": [{"key": "SPY", "market": "cedears", "name": "SPDR S&P 500 ETF Trust", "sector": "Financial", "ratio": 60, "instrument_type": "ETF", "units": 45.0, "units_sold": 0.0, "trend_30d": -0.10152284263959391, "price_source": "PPI (en vivo)", "fx_approx": false, "native_currency": "ars", "price_debug_note": null, "avg_cost_ars": 17118.272309999997, "price_ars": 19680.0, "invested_ars": 770322.2539499999, "value_ars": 885600.0, "pl_abs_ars": 115277.74605000007, "pl_pct_ars": 14.964872877407814, "cost_of_sales_ars": 0.0, "income_from_sales_ars": 0.0, "realized_abs_ars": 0.0, "realized_pct_ars": null, "avg_cost_usd": 11.103, "price_usd": 12.962846842656123, "invested_usd": 499.635, "value_usd": 583.3281079195256, "pl_abs_usd": 83.69310791952557, "pl_pct_usd": 16.75084970418917, "cost_of_sales_usd": 0.0, "income_from_sales_usd": 0.0, "realized_abs_usd": 0.0, "realized_pct_usd": null, "pct_portfolio_ars": 100.0, "pct_portfolio_usd": 100.0}]}, "merval": {"label": "Acciones Merval", "kpis": {"ars": {"invested": 140800.0, "value": 165800.0, "pl_abs": 25000.0, "pl_pct": 17.755681818181817, "realized": 0.0}, "usd": {"invested": 95.25852066, "value": 109.20934992440982, "pl_abs": 13.950829264409819, "pl_pct": 14.645229810153781, "realized": 0.0}, "unpriced": 0}, "rows": [{"key": "YPFD", "market": "merval", "name": "YPF SA", "sector": "Energy", "ratio": 1, "instrument_type": "Stock", "units": 2.0, "units_sold": 0.0, "trend_30d": 14.108740536820372, "price_source": "PPI (en vivo)", "fx_approx": false, "native_currency": "ars", "price_debug_note": null, "avg_cost_ars": 70400.0, "price_ars": 82900.0, "invested_ars": 140800.0, "value_ars": 165800.0, "pl_abs_ars": 25000.0, "pl_pct_ars": 17.755681818181817, "cost_of_sales_ars": 0.0, "income_from_sales_ars": 0.0, "realized_abs_ars": 0.0, "realized_pct_ars": null, "avg_cost_usd": 47.62926033, "price_usd": 54.60467496220491, "invested_usd": 95.25852066, "value_usd": 109.20934992440982, "pl_abs_usd": 13.950829264409819, "pl_pct_usd": 14.645229810153781, "cost_of_sales_usd": 0.0, "income_from_sales_usd": 0.0, "realized_abs_usd": 0.0, "realized_pct_usd": null, "pct_portfolio_ars": 100.0, "pct_portfolio_usd": 100.0}]}, "rsu": {"label": "RSU JPM", "kpis": {"ars": {"invested": 2465897.418, "value": 4806740.799788136, "pl_abs": 2340843.381788136, "pl_pct": 94.92866023951268, "realized": 0.0}, "usd": {"invested": 2356.8912, "value": 3166.11, "pl_abs": 809.2188000000001, "pl_pct": 34.33416018524742, "realized": 0.0}, "unpriced": 0}, "rows": [{"key": "JPM", "market": "rsu", "name": "JPMorgan Chase & Co. (RSU)", "sector": "Financial", "ratio": 1, "instrument_type": "Stock", "units": 9.0, "units_sold": 0.0, "trend_30d": 4.166173161198624, "price_source": "PPI (en vivo)", "fx_approx": false, "native_currency": "usd", "price_debug_note": null, "avg_cost_ars": 273988.602, "price_ars": 534082.3110875706, "invested_ars": 2465897.418, "value_ars": 4806740.799788136, "pl_abs_ars": 2340843.381788136, "pl_pct_ars": 94.92866023951268, "cost_of_sales_ars": 0.0, "income_from_sales_ars": 0.0, "realized_abs_ars": 0.0, "realized_pct_ars": null, "avg_cost_usd": 261.8768, "price_usd": 351.79, "invested_usd": 2356.8912, "value_usd": 3166.11, "pl_abs_usd": 809.2188000000001, "pl_pct_usd": 34.33416018524742, "cost_of_sales_usd": 0.0, "income_from_sales_usd": 0.0, "realized_abs_usd": 0.0, "realized_pct_usd": null, "pct_portfolio_ars": 100.0, "pct_portfolio_usd": 100.0}]}, "bonds": {"label": "Bonos", "kpis": {"ars": {"invested": 1408126.714, "value": 1517040.0, "pl_abs": 108913.28600000008, "pl_pct": 7.734622524887351, "realized": 0.0}, "usd": {"invested": 982.98, "value": 999.2457913710898, "pl_abs": 16.26579137108979, "pl_pct": 1.6547428605963286, "realized": 0.0}, "unpriced": 0}, "rows": [{"key": "AO28", "market": "bonds", "name": "Bonar 2028 (AO28)", "sector": "Renta Fija", "ratio": 1, "instrument_type": "Bono", "units": 1032.0, "units_sold": 0.0, "trend_30d": -0.8966493629070316, "price_source": "PPI (en vivo)", "fx_approx": false, "native_currency": "ars", "price_debug_note": null, "avg_cost_ars": 1364.4638701550386, "price_ars": 1470.0, "invested_ars": 1408126.714, "value_ars": 1517040.0, "pl_abs_ars": 108913.28600000008, "pl_pct_ars": 7.734622524887351, "cost_of_sales_ars": 0.0, "income_from_sales_ars": 0.0, "realized_abs_ars": 0.0, "realized_pct_ars": null, "avg_cost_usd": 0.9525, "price_usd": 0.96826142574718, "invested_usd": 982.98, "value_usd": 999.2457913710898, "pl_abs_usd": 16.26579137108979, "pl_pct_usd": 1.6547428605963286, "cost_of_sales_usd": 0.0, "income_from_sales_usd": 0.0, "realized_abs_usd": 0.0, "realized_pct_usd": null, "pct_portfolio_ars": 100.0, "pct_portfolio_usd": 100.0}]}}, "general": [{"key": "JPM", "market": "rsu", "name": "JPMorgan Chase & Co. (RSU)", "sector": "Financial", "ratio": 1, "instrument_type": "Stock", "units": 9.0, "units_sold": 0.0, "trend_30d": 4.166173161198624, "price_source": "PPI (en vivo)", "fx_approx": false, "native_currency": "usd", "price_debug_note": null, "avg_cost_ars": 273988.602, "price_ars": 534082.3110875706, "invested_ars": 2465897.418, "value_ars": 4806740.799788136, "pl_abs_ars": 2340843.381788136, "pl_pct_ars": 94.92866023951268, "cost_of_sales_ars": 0.0, "income_from_sales_ars": 0.0, "realized_abs_ars": 0.0, "realized_pct_ars": null, "avg_cost_usd": 261.8768, "price_usd": 351.79, "invested_usd": 2356.8912, "value_usd": 3166.11, "pl_abs_usd": 809.2188000000001, "pl_pct_usd": 34.33416018524742, "cost_of_sales_usd": 0.0, "income_from_sales_usd": 0.0, "realized_abs_usd": 0.0, "realized_pct_usd": null, "pct_portfolio_ars": 100.0, "pct_portfolio_usd": 100.0}, {"key": "SPY", "market": "cedears", "name": "SPDR S&P 500 ETF Trust", "sector": "Financial", "ratio": 60, "instrument_type": "ETF", "units": 45.0, "units_sold": 0.0, "trend_30d": -0.10152284263959391, "price_source": "PPI (en vivo)", "fx_approx": false, "native_currency": "ars", "price_debug_note": null, "avg_cost_ars": 17118.272309999997, "price_ars": 19680.0, "invested_ars": 770322.2539499999, "value_ars": 885600.0, "pl_abs_ars": 115277.74605000007, "pl_pct_ars": 14.964872877407814, "cost_of_sales_ars": 0.0, "income_from_sales_ars": 0.0, "realized_abs_ars": 0.0, "realized_pct_ars": null, "avg_cost_usd": 11.103, "price_usd": 12.962846842656123, "invested_usd": 499.635, "value_usd": 583.3281079195256, "pl_abs_usd": 83.69310791952557, "pl_pct_usd": 16.75084970418917, "cost_of_sales_usd": 0.0, "income_from_sales_usd": 0.0, "realized_abs_usd": 0.0, "realized_pct_usd": null, "pct_portfolio_ars": 100.0, "pct_portfolio_usd": 100.0}, {"key": "AO28", "market": "bonds", "name": "Bonar 2028 (AO28)", "sector": "Renta Fija", "ratio": 1, "instrument_type": "Bono", "units": 1032.0, "units_sold": 0.0, "trend_30d": -0.8966493629070316, "price_source": "PPI (en vivo)", "fx_approx": false, "native_currency": "ars", "price_debug_note": null, "avg_cost_ars": 1364.4638701550386, "price_ars": 1470.0, "invested_ars": 1408126.714, "value_ars": 1517040.0, "pl_abs_ars": 108913.28600000008, "pl_pct_ars": 7.734622524887351, "cost_of_sales_ars": 0.0, "income_from_sales_ars": 0.0, "realized_abs_ars": 0.0, "realized_pct_ars": null, "avg_cost_usd": 0.9525, "price_usd": 0.96826142574718, "invested_usd": 982.98, "value_usd": 999.2457913710898, "pl_abs_usd": 16.26579137108979, "pl_pct_usd": 1.6547428605963286, "cost_of_sales_usd": 0.0, "income_from_sales_usd": 0.0, "realized_abs_usd": 0.0, "realized_pct_usd": null, "pct_portfolio_ars": 100.0, "pct_portfolio_usd": 100.0}, {"key": "YPFD", "market": "merval", "name": "YPF SA", "sector": "Energy", "ratio": 1, "instrument_type": "Stock", "units": 2.0, "units_sold": 0.0, "trend_30d": 14.108740536820372, "price_source": "PPI (en vivo)", "fx_approx": false, "native_currency": "ars", "price_debug_note": null, "avg_cost_ars": 70400.0, "price_ars": 82900.0, "invested_ars": 140800.0, "value_ars": 165800.0, "pl_abs_ars": 25000.0, "pl_pct_ars": 17.755681818181817, "cost_of_sales_ars": 0.0, "income_from_sales_ars": 0.0, "realized_abs_ars": 0.0, "realized_pct_ars": null, "avg_cost_usd": 47.62926033, "price_usd": 54.60467496220491, "invested_usd": 95.25852066, "value_usd": 109.20934992440982, "pl_abs_usd": 13.950829264409819, "pl_pct_usd": 14.645229810153781, "cost_of_sales_usd": 0.0, "income_from_sales_usd": 0.0, "realized_abs_usd": 0.0, "realized_pct_usd": null, "pct_portfolio_ars": 100.0, "pct_portfolio_usd": 100.0}, {"key": "BTC", "market": "usd", "name": "Grayscale Bitcoin Mini Trust ETF", "sector": "Crypto Assets", "ratio": 1, "instrument_type": "ETF", "units": 4.0, "units_sold": 0.0, "trend_30d": null, "price_source": "Yahoo Finance", "fx_approx": false, "native_currency": "usd", "price_debug_note": null, "avg_cost_ars": 42960.3952, "price_ars": 42220.72482479494, "invested_ars": 171841.5808, "value_ars": 168882.89929917976, "pl_abs_ars": -2958.6815008202393, "pl_pct_ars": -1.7217494665995525, "cost_of_sales_ars": 0.0, "income_from_sales_ars": 0.0, "realized_abs_ars": 0.0, "realized_pct_ars": null, "avg_cost_usd": 29.065, "price_usd": 27.809999465942383, "invested_usd": 116.26, "value_usd": 111.23999786376953, "pl_abs_usd": -5.020002136230474, "pl_pct_usd": -4.317909974394008, "cost_of_sales_usd": 0.0, "income_from_sales_usd": 0.0, "realized_abs_usd": 0.0, "realized_pct_usd": null, "pct_portfolio_ars": 100.0, "pct_portfolio_usd": 100.0}], "transactions": [{"ticker": "SPY", "market": "cedears", "op": "BUY", "date": "30/09/2025", "units": 45.0, "amount_ars": 770322.2539499999, "amount_usd": 499.635, "price_ars": 17118.272309999997, "price_usd": 11.103, "current_price_ars": 19680.0, "current_price_usd": 12.962846842656123, "current_price_source": "PPI (en vivo)", "pl_pct_ars": 14.964872877407826, "pl_pct_usd": 16.75084970418917}, {"ticker": "AO28", "market": "bonds", "op": "BUY", "date": "2026-11-06", "units": 1032.0, "amount_ars": 1408126.714, "amount_usd": 982.98, "price_ars": 1364.4638701550386, "price_usd": 0.9525, "current_price_ars": 1470.0, "current_price_usd": 0.96826142574718, "current_price_source": "PPI (en vivo)", "pl_pct_ars": 7.734622524887354, "pl_pct_usd": 1.6547428605963235}, {"ticker": "YPFD", "market": "merval", "op": "BUY", "date": "2026-06-26", "units": 2.0, "amount_ars": 140800.0, "amount_usd": 95.25852066, "price_ars": 70400.0, "price_usd": 47.62926033, "current_price_ars": 82900.0, "current_price_usd": 54.60467496220491, "current_price_source": "PPI (en vivo)", "pl_pct_ars": 17.755681818181817, "pl_pct_usd": 14.645229810153781}, {"ticker": "BTC", "market": "usd", "op": "BUY", "date": "2026-06-26", "units": 4.0, "amount_ars": 171841.5808, "amount_usd": 116.26, "price_ars": 42960.3952, "price_usd": 29.065, "current_price_ars": 42220.72482479494, "current_price_usd": 27.809999465942383, "current_price_source": "Yahoo Finance", "pl_pct_ars": -1.7217494665995525, "pl_pct_usd": -4.317909974394008}, {"ticker": "JPM", "market": "rsu", "op": "BUY", "date": "2025-01-21", "units": 9.0, "amount_ars": 2465897.418, "amount_usd": 2356.8912, "price_ars": 273988.602, "price_usd": 261.8768, "current_price_ars": 534082.3110875706, "current_price_usd": 351.79, "current_price_source": "PPI (en vivo)", "pl_pct_ars": 94.92866023951267, "pl_pct_usd": 34.33416018524742}], "fx_rate": 1518.1850282485875, "fx_source": "PPI (MEP AL30/AL30D, en vivo)", "generated_at": "2026-08-03 02:43"};
+
+const fmt = (n) => n === null || n === undefined ? '—' :
+  n.toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtPct = (n) => n === null || n === undefined ? '—' : (n>=0?'+':'') + n.toFixed(2) + '%';
+const plClass = (n) => n === null || n === undefined ? '' : (n >= 0 ? 'pos' : 'neg');
+// "en vivo" cubre tanto PPI como el fallback de Yahoo Finance (segunda
+// fuente para instrumentos en USD que PPI no cotiza o no tiene datos ahora).
+const isLiveSource = (s) => s === 'PPI (en vivo)' || s === 'Yahoo Finance';
+
+document.getElementById('generatedAt').textContent = 'Generado ' + DATA.generated_at;
+document.getElementById('fxBar').textContent = DATA.fx_rate
+  ? `Tipo de cambio usado: 1 USD = ${fmt(DATA.fx_rate)} ARS (${DATA.fx_source})`
+  : `Tipo de cambio no disponible (${DATA.fx_source}) -- las columnas convertidas quedan vacías`;
+
+const MARKET_KEYS = ['general', 'usd', 'cedears', 'merval', 'rsu', 'bonds', 'tx'];
+const TAB_LABELS = { general: 'General', usd: 'US Stocks', cedears: 'Cedears', merval: 'Acciones Merval', rsu: 'RSU JPM', bonds: 'Bonos', tx: 'Transacciones' };
+
+// portfolios "reales" (no general/tx) -- para armar los totales combinados
+// de la pestana General sin repetir la lista en cada lugar.
+const PORTFOLIO_KEYS = ['usd', 'cedears', 'merval', 'rsu', 'bonds'];
+
+const tabsEl = document.getElementById('tabs');
+const pagesEl = document.getElementById('pages');
+
+// Cada tabla muestra UNA sola moneda a la vez (columnas base + las 10
+// columnas "duales" resueltas segun el filtro de moneda de esa pestana).
+const DEFAULT_CURRENCY = { general: 'usd', usd: 'usd', cedears: 'ars', merval: 'ars', rsu: 'usd', bonds: 'ars' };
+
+const COLUMNS_BASE = [
+  {key:'key', label:'Ticker'},
+  {key:'name', label:'Nombre'},
+  {key:'sector', label:'Sector'},
+  {key:'instrument_type', label:'Tipo'},
+  {key:'units', label:'Unid.', num:true},
+  {key:'units_sold', label:'Unid. Vend.', num:true},
+  {key:'trend_30d', label:'Tend. 30d %', num:true, pct:true},
+];
+const COLUMNS_DUAL = [
+  {key:'pct_portfolio', label:'% Portfolio', num:true, pct:true, dual:true},
+  {key:'avg_cost', label:'Prom. Compra', num:true, dual:true},
+  {key:'price', label:'Precio Actual', num:true, dual:true},
+  {key:'invested', label:'Invertido', num:true, dual:true},
+  {key:'value', label:'Valor Actual', num:true, dual:true},
+  {key:'pl_abs', label:'P&L $', num:true, pl:true, dual:true},
+  {key:'pl_pct', label:'P&L %', num:true, pl:true, pct:true, dual:true},
+  {key:'cost_of_sales', label:'Costo Ventas', num:true, dual:true},
+  {key:'income_from_sales', label:'Ingreso Ventas', num:true, dual:true},
+  {key:'realized_abs', label:'P&L Realiz. $', num:true, pl:true, dual:true},
+  {key:'realized_pct', label:'P&L Realiz. %', num:true, pl:true, pct:true, dual:true},
+];
+
+// La pestana general muestra UNA fila por portfolio (USD/Cedears/Merval),
+// no una fila por producto -- son los totales de cada tabla de arriba.
+const GENERAL_COLUMNS = [
+  {key:'label', label:'Portfolio'},
+  {key:'count', label:'Instrumentos', num:true},
+  {key:'pct_portfolio', label:'% Portfolio', num:true, pct:true},
+  {key:'unpriced', label:'Sin Precio', num:true},
+  {key:'invested', label:'Invertido', num:true, showCurrency:true},
+  {key:'value', label:'Valor Actual', num:true, showCurrency:true},
+  {key:'pl_abs', label:'P&L $', num:true, pl:true, showCurrency:true},
+  {key:'pl_pct', label:'P&L %', num:true, pl:true, pct:true, showCurrency:true},
+  {key:'realized', label:'P&L Realizado', num:true, pl:true, showCurrency:true},
+];
+
+// Pestana "Transacciones": una fila por operacion (BUY/SELL), no agregada.
+const TX_COLUMNS = [
+  {key:'ticker', label:'Ticker'},
+  {key:'market', label:'Tipo'},
+  {key:'op', label:'Operacion'},
+  {key:'date', label:'Fecha'},
+  {key:'units', label:'Unidades', num:true},
+  // primero todo en ARS, despues todo en USD (mismo orden que las tablas
+  // por tipo de instrumento).
+  {key:'price_ars', label:'Precio Operacion (ARS)', num:true},
+  {key:'amount_ars', label:'Monto (ARS)', num:true},
+  {key:'current_price_ars', label:'Cotizacion Actual (ARS)', num:true},
+  {key:'pl_pct_ars', label:'P&L % (ARS)', num:true, pct:true, pl:true},
+  {key:'price_usd', label:'Precio Operacion (USD)', num:true},
+  {key:'amount_usd', label:'Monto (USD)', num:true},
+  {key:'current_price_usd', label:'Cotizacion Actual (USD)', num:true},
+  {key:'pl_pct_usd', label:'P&L % (USD)', num:true, pct:true, pl:true},
+];
+
+function getCols(marketKey) {
+  if (marketKey === 'general') return GENERAL_COLUMNS;
+  if (marketKey === 'tx') return TX_COLUMNS;
+  return [...COLUMNS_BASE, ...COLUMNS_DUAL];
+}
+
+function buildGeneralRows(currency) {
+  const totalValue = computeGeneralTotals(currency).value;
+  return PORTFOLIO_KEYS.map(m => {
+    const k = DATA.markets[m].kpis[currency];
+    return {
+      label: TAB_LABELS[m],
+      market: m,
+      count: DATA.markets[m].rows.length,
+      unpriced: DATA.markets[m].kpis.unpriced,
+      invested: k.invested, value: k.value,
+      pct_portfolio: totalValue ? (k.value / totalValue * 100) : null,
+      pl_abs: k.pl_abs,
+      pl_pct: k.pl_pct, realized: k.realized,
+    };
+  });
+}
+
+// Totales combinados de los 3 portfolios, para las pills de arriba de la
+// pestana general (mismo total que antes mostraba la fila "Total").
+function computeGeneralTotals(currency) {
+  const parts = PORTFOLIO_KEYS.map(m => DATA.markets[m].kpis[currency]);
+  const invested = parts.reduce((s, k) => s + (k.invested || 0), 0);
+  const value = parts.reduce((s, k) => s + (k.value || 0), 0);
+  const pl_abs = value - invested;
+  const pl_pct = invested ? (pl_abs / invested * 100) : null;
+  const realized = parts.reduce((s, k) => s + (k.realized || 0), 0);
+  return { invested, value, pl_abs, pl_pct, realized };
+}
+
+function computeGeneralUnpriced() {
+  return PORTFOLIO_KEYS.reduce((s, m) => s + DATA.markets[m].kpis.unpriced, 0);
+}
+
+function _sumOrNone(rows, key) {
+  let has = false, sum = 0;
+  for (const r of rows) {
+    const v = r[key];
+    if (v !== null && v !== undefined) { has = true; sum += v; }
+  }
+  return has ? sum : null;
+}
+
+// Recalcula los KPIs de una pestana por tipo de instrumento a partir de
+// cualquier subconjunto de filas (ej. lo que queda despues de buscar o
+// filtrar por sector), asi las pills de arriba siempre reflejan lo que se
+// esta viendo en la tabla de abajo -- igual logica que _market_kpis() en Python.
+function computeMarketKpis(rows, currency) {
+  const invested = _sumOrNone(rows, `invested_${currency}`);
+  const value = _sumOrNone(rows, `value_${currency}`);
+  const pl_abs = (value !== null && invested !== null) ? (value - invested) : null;
+  const pl_pct = (pl_abs !== null && invested) ? (pl_abs / invested * 100) : null;
+  const realized = _sumOrNone(rows, `realized_abs_${currency}`);
+  return { invested, value, pl_abs, pl_pct, realized };
+}
+
+function cellValue(r, c, currency) {
+  return c.dual ? r[`${c.key}_${currency}`] : r[c.key];
+}
+
+function buildKpiGroup(k) {
+  const items = [
+    ['Invertido', fmt(k.invested), ''],
+    ['Valor Actual', fmt(k.value), ''],
+    ['P&L No Realiz.', fmt(k.pl_abs), plClass(k.pl_abs)],
+    ['P&L No Realiz. %', fmtPct(k.pl_pct), plClass(k.pl_pct)],
+    ['P&L Realizado', fmt(k.realized), plClass(k.realized)],
+  ];
+  return `<div class="kpis">${items.map(([label,val,cls]) =>
+    `<div class="kpi"><div class="label">${label}</div><div class="val ${cls}">${val}</div></div>`
+  ).join('')}</div>`;
+}
+
+function renderKpis(marketKey, filteredRows) {
+  const currency = tableState[marketKey].currency;
+  const k = marketKey === 'general'
+    ? computeGeneralTotals(currency)
+    : computeMarketKpis(filteredRows || filterRows(marketKey), currency);
+  const title = currency === 'ars' ? 'En Pesos (ARS)' : 'En Dolares (USD)';
+  document.getElementById(`kpis-${marketKey}`).innerHTML =
+    `<h3 class="kpi-title">${title}</h3>${buildKpiGroup(k)}`;
+}
+
+function uniqueSorted(rows, key) {
+  return [...new Set(rows.map(r => r[key]).filter(v => v !== null && v !== undefined && v !== ''))].sort();
+}
+
+function buildPage(marketKey) {
+  const isGeneral = marketKey === 'general';
+  const isTx = marketKey === 'tx';
+  const defaultCurrency = DEFAULT_CURRENCY[marketKey];
+
+  const page = document.createElement('div');
+  page.className = 'page';
+  page.id = 'page-' + marketKey;
+
+  let html = '';
+
+  if (isTx) {
+    const typeOptions = PORTFOLIO_KEYS;
+    html += `<div class="toolbar">
+      <input type="text" placeholder="Buscar ticker..." data-role="search" data-market="${marketKey}">
+      <select data-role="type" data-market="${marketKey}">
+        <option value="">Todos los portfolios</option>
+        ${typeOptions.map(t => `<option value="${t}">${TAB_LABELS[t]}</option>`).join('')}
+      </select>
+      <span class="count" data-role="count" data-market="${marketKey}"></span>
+    </div>`;
+  } else if (isGeneral) {
+    const anyApprox = PORTFOLIO_KEYS.some(m => DATA.markets[m].rows.some(r => r.fx_approx));
+    html += `<div id="kpis-${marketKey}"></div>`;
+    const unpriced = computeGeneralUnpriced();
+    if (unpriced > 0) {
+      html += `<div class="unpriced-note">${unpriced} instrumento(s) sin precio actual disponible.</div>`;
+    }
+    if (anyApprox) {
+      html += `<div class="approx-note">Uno o mas portfolios tienen posiciones con montos aproximados en la moneda no nativa (se convirtieron al tipo de cambio de HOY para esa operacion puntual, no historico). Mira el detalle en la pestana de cada tipo de instrumento.</div>`;
+    }
+    html += `<div class="toolbar">
+      <select data-role="currency" data-market="${marketKey}">
+        <option value="ars" ${defaultCurrency==='ars'?'selected':''}>Moneda: ARS</option>
+        <option value="usd" ${defaultCurrency==='usd'?'selected':''}>Moneda: USD</option>
+      </select>
+    </div>`;
+  } else {
+    const rows = DATA.markets[marketKey].rows;
+    const hasApprox = rows.some(r => r.fx_approx);
+    html += `<div id="kpis-${marketKey}"></div>`;
+    html += `<div class="unpriced-note">Instrumentos sin precio: ${DATA.markets[marketKey].kpis.unpriced}</div>`;
+    if (hasApprox) {
+      html += `<div class="approx-note">Algunas operaciones de esta posicion no tienen cargado el monto en la otra moneda (columna opcional en la hoja de transacciones), asi que para esas puntualmente se aproximo al tipo de cambio de HOY en vez del historico de esa operacion. El resto usa el monto real que cargaste.</div>`;
+    }
+    html += `<div class="charts">
+      <div class="chart-card"><canvas id="bar-${marketKey}"></canvas></div>
+      <div class="chart-card"><canvas id="pie-${marketKey}"></canvas></div>
+    </div>`;
+
+    const sectorOptions = uniqueSorted(rows, 'sector');
+    const instTypeOptions = uniqueSorted(rows, 'instrument_type');
+    html += `<div class="toolbar">
+      <input type="text" placeholder="Buscar ticker o nombre..." data-role="search" data-market="${marketKey}">
+      <select data-role="sector" data-market="${marketKey}">
+        <option value="">Todos los sectores</option>
+        ${sectorOptions.map(s => `<option value="${s}">${s}</option>`).join('')}
+      </select>
+      <select data-role="insttype" data-market="${marketKey}">
+        <option value="">Todos los tipos</option>
+        ${instTypeOptions.map(t => `<option value="${t}">${t}</option>`).join('')}
+      </select>
+      <select data-role="currency" data-market="${marketKey}">
+        <option value="ars" ${defaultCurrency==='ars'?'selected':''}>Moneda: ARS</option>
+        <option value="usd" ${defaultCurrency==='usd'?'selected':''}>Moneda: USD</option>
+      </select>
+      <span class="count" data-role="count" data-market="${marketKey}"></span>
+    </div>`;
+  }
+
+  html += `<div class="table-wrap" id="wrap-${marketKey}"><table id="table-${marketKey}">
+    <thead><tr data-role="thead" data-market="${marketKey}"></tr></thead>
+    <tbody></tbody>
+  </table></div>
+  <input type="range" class="hscroll" id="hscroll-${marketKey}" min="0" max="0" value="0" step="1">`;
+
+  page.innerHTML = html;
+  return page;
+}
+
+function renderHead(marketKey) {
+  const currency = tableState[marketKey].currency;
+  const cols = getCols(marketKey);
+  const theadRow = document.querySelector(`thead tr[data-role="thead"][data-market="${marketKey}"]`);
+  theadRow.innerHTML = cols.map(c => {
+    const label = (c.dual || c.showCurrency) ? `${c.label} (${currency.toUpperCase()})` : c.label;
+    return `<th data-key="${c.key}" data-market="${marketKey}">${label}</th>`;
+  }).join('');
+  wireSortHeaders(marketKey);
+  const sort = tableState[marketKey].sort;
+  const activeTh = theadRow.querySelector(`th[data-key="${sort.key}"]`);
+  if (activeTh) activeTh.classList.add(sort.dir === 1 ? 'sorted-asc' : 'sorted-desc');
+}
+
+function wireSortHeaders(marketKey) {
+  const cols = getCols(marketKey);
+  document.querySelectorAll(`#table-${marketKey} th`).forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.key;
+      const col = cols.find(c => c.key === key);
+      const cur = tableState[marketKey].sort;
+      const dir = (cur && cur.key === key) ? -cur.dir : -1;
+      tableState[marketKey].sort = { key, dir, dual: !!(col && col.dual) };
+      document.querySelectorAll(`#table-${marketKey} th`).forEach(h => h.classList.remove('sorted-asc','sorted-desc'));
+      th.classList.add(dir === 1 ? 'sorted-asc' : 'sorted-desc');
+      applyFilters(marketKey, cols);
+    });
+  });
+}
+
+const hscrollSync = {};
+
+function wireHScroll(marketKey) {
+  const wrap = document.getElementById(`wrap-${marketKey}`);
+  const slider = document.getElementById(`hscroll-${marketKey}`);
+
+  const syncMax = () => {
+    // page might be display:none (inactive tab) -> scrollWidth/clientWidth
+    // both read 0 then; harmless, we resync when the tab becomes active.
+    const max = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
+    slider.max = max;
+    slider.disabled = max <= 0;
+    if (Number(slider.value) > max) slider.value = max;
+  };
+
+  hscrollSync[marketKey] = syncMax;
+  syncMax();
+  window.addEventListener('resize', syncMax);
+  setTimeout(syncMax, 50);
+
+  slider.addEventListener('input', () => { wrap.scrollLeft = Number(slider.value); });
+  wrap.addEventListener('scroll', () => { slider.value = wrap.scrollLeft; }, { passive: true });
+}
+
+function renderRows(marketKey, rows, cols) {
+  const currency = tableState[marketKey].currency;
+  const tbody = document.querySelector(`#table-${marketKey} tbody`);
+  tbody.innerHTML = rows.map(r => {
+    const rowClass = r.market ? 'row-link' : '';
+    const rowAttr = r.market ? ` data-market-link="${r.market}"` : '';
+    return `<tr class="${rowClass}"${rowAttr}>${cols.map(c => {
+    let v = cellValue(r, c, currency);
+    if (c.key === 'key') {
+      return `<td><strong class="ticker-link" data-ticker="${r.key}">${r.key}</strong> <span class="tag ${isLiveSource(r.price_source)?'live':''}">${r.price_source||''}</span></td>`;
+    }
+    if (c.key === 'ticker') {
+      const src = r.current_price_source;
+      const tag = src ? `<span class="tag ${isLiveSource(src)?'live':''}">${src}</span>` : '';
+      return `<td><strong class="ticker-link" data-ticker="${v}">${v}</strong> ${tag}</td>`;
+    }
+    if (c.key === 'label') return `<td><strong>${v}</strong></td>`;
+    if (c.key === 'market') return `<td>${TAB_LABELS[v] || v}</td>`;
+    if (c.key === 'op') return `<td class="${v==='BUY'?'pos':(v==='SELL'?'neg':'')}">${v}</td>`;
+    if (v === null || v === undefined) return `<td>—</td>`;
+    if (c.pct) return `<td class="${c.pl?plClass(v):''}">${fmtPct(v)}</td>`;
+    if (c.pl) return `<td class="${plClass(v)}">${fmt(v)}</td>`;
+    if (c.num) return `<td>${fmt(v)}</td>`;
+    return `<td>${v}</td>`;
+    }).join('')}</tr>`;
+  }).join('');
+  const countEl = document.querySelector(`[data-role="count"][data-market="${marketKey}"]`);
+  if (countEl) {
+    const total = marketKey === 'tx' ? DATA.transactions.length : DATA.markets[marketKey].rows.length;
+    countEl.textContent = `${rows.length} de ${total}`;
+  }
+}
+
+// Filas que pasan los filtros activos (busqueda/sector/tipo) de esa
+// pestana, sin ordenar todavia -- lo usan tanto la tabla como los graficos,
+// asi ambos quedan siempre en sincro con lo que el usuario esta filtrando.
+function filterRows(marketKey) {
+  const currency = tableState[marketKey].currency;
+
+  if (marketKey === 'general') {
+    return buildGeneralRows(currency);
+  }
+  if (marketKey === 'tx') {
+    const searchEl = document.querySelector(`[data-role="search"][data-market="tx"]`);
+    const typeEl = document.querySelector(`[data-role="type"][data-market="tx"]`);
+    const search = (searchEl.value || '').toLowerCase();
+    const type = typeEl.value;
+    return DATA.transactions.filter(r => {
+      if (search && !r.ticker.toLowerCase().includes(search)) return false;
+      if (type && r.market !== type) return false;
+      return true;
+    });
+  }
+  const allRows = DATA.markets[marketKey].rows;
+  const searchEl = document.querySelector(`[data-role="search"][data-market="${marketKey}"]`);
+  const sectorEl = document.querySelector(`[data-role="sector"][data-market="${marketKey}"]`);
+  const instTypeEl = document.querySelector(`[data-role="insttype"][data-market="${marketKey}"]`);
+  const search = (searchEl.value || '').toLowerCase();
+  const sector = sectorEl.value;
+  const instType = instTypeEl ? instTypeEl.value : '';
+  return allRows.filter(r => {
+    if (search && !(`${r.key} ${r.name}`.toLowerCase().includes(search))) return false;
+    if (sector && r.sector !== sector) return false;
+    if (instType && r.instrument_type !== instType) return false;
+    return true;
+  });
+}
+
+function applyFilters(marketKey, cols) {
+  const currency = tableState[marketKey].currency;
+  let rows = filterRows(marketKey);
+
+  const sortState = tableState[marketKey].sort;
+  if (sortState) {
+    const { key, dir, dual } = sortState;
+    const resolveKey = r => dual ? r[`${key}_${currency}`] : r[key];
+    rows = [...rows].sort((a, b) => {
+      let av = resolveKey(a), bv = resolveKey(b);
+      const aNull = av === null || av === undefined || av === '';
+      const bNull = bv === null || bv === undefined || bv === '';
+      if (aNull && bNull) return 0;
+      if (aNull) return 1;
+      if (bNull) return -1;
+      if (typeof av === 'string') return dir * av.localeCompare(bv);
+      return dir * (av - bv);
+    });
+  }
+
+  renderRows(marketKey, rows, cols);
+  // los graficos y las pills de KPIs (no existen en Transacciones) se
+  // recalculan con el mismo subconjunto filtrado que se ve en la tabla.
+  if (marketKey !== 'general' && marketKey !== 'tx') renderCharts(marketKey, rows);
+  if (marketKey !== 'tx') renderKpis(marketKey, rows);
+}
+
+const tableState = {};
+const chartInstances = {};
+
+function renderCharts(marketKey, filteredRows) {
+  // General (tabla resumen de 3 filas) y Transacciones no tienen graficos.
+  if (marketKey === 'general' || marketKey === 'tx') return;
+
+  const currency = tableState[marketKey].currency;
+  const cur = currency.toUpperCase();
+  if (chartInstances[marketKey]) {
+    chartInstances[marketKey].forEach(c => { if (c && typeof c.destroy === 'function') c.destroy(); });
+  }
+
+  // si no se paso un subconjunto ya filtrado, usar todo el portfolio
+  // (caso init, antes de que el usuario aplique ningun filtro).
+  const rows = filteredRows || DATA.markets[marketKey].rows;
+  const top = [...rows].sort((a,b) => (b[`value_${currency}`]||0)-(a[`value_${currency}`]||0)).slice(0, 10);
+  const bar = new Chart(document.getElementById(`bar-${marketKey}`), {
+    type: 'bar',
+    data: { labels: top.map(r=>r.key), datasets: [
+      {label:`Invertido (${cur})`, data: top.map(r=>r[`invested_${currency}`]), backgroundColor:'#6ea8fe'},
+      {label:`Valor Actual (${cur})`, data: top.map(r=>r[`value_${currency}`]||0), backgroundColor:'#3ddc84'},
+    ]},
+    options: { plugins:{legend:{labels:{color:'#e7e9ee'}}}, scales:{
+      x:{ticks:{color:'#9aa2b1'}}, y:{ticks:{color:'#9aa2b1'}}
+    }}
+  });
+  const palette = ['#6ea8fe','#3ddc84','#ffb84d','#ff5c5c','#c792ea','#4dd0e1','#f78fb3','#a0c980','#ffd166','#8d99ae'];
+  const pie = new Chart(document.getElementById(`pie-${marketKey}`), {
+    type: 'doughnut',
+    data: { labels: top.map(r=>r.key), datasets: [{ data: top.map(r=>r[`value_${currency}`]||0), backgroundColor: palette }] },
+    options: { plugins:{legend:{position:'bottom', labels:{color:'#e7e9ee', boxWidth:10, font:{size:10}}}} }
+  });
+  chartInstances[marketKey] = [bar, pie];
+}
+
+function initPage(marketKey) {
+  const isGeneral = marketKey === 'general';
+  const isTx = marketKey === 'tx';
+  const cols = getCols(marketKey);
+  tableState[marketKey] = {
+    currency: DEFAULT_CURRENCY[marketKey] || 'ars',
+    sort: {
+      key: isGeneral ? 'pl_abs' : (isTx ? 'date' : 'value'),
+      dir: -1,
+      dual: !isGeneral && !isTx,
+    },
+  };
+
+  renderHead(marketKey);
+  applyFilters(marketKey, cols); // tambien dispara renderCharts y renderKpis con el set filtrado
+  wireHScroll(marketKey);
+
+  if (isTx) {
+    document.querySelector(`[data-role="search"][data-market="tx"]`)
+      .addEventListener('input', () => applyFilters('tx', cols));
+    document.querySelector(`[data-role="type"][data-market="tx"]`)
+      .addEventListener('change', () => applyFilters('tx', cols));
+  } else if (!isGeneral) {
+    document.querySelector(`[data-role="search"][data-market="${marketKey}"]`)
+      .addEventListener('input', () => applyFilters(marketKey, cols));
+    document.querySelector(`[data-role="sector"][data-market="${marketKey}"]`)
+      .addEventListener('change', () => applyFilters(marketKey, cols));
+    document.querySelector(`[data-role="insttype"][data-market="${marketKey}"]`)
+      .addEventListener('change', () => applyFilters(marketKey, cols));
+  }
+
+  const currencyEl = document.querySelector(`[data-role="currency"][data-market="${marketKey}"]`);
+  if (currencyEl) {
+    currencyEl.addEventListener('change', (e) => {
+      tableState[marketKey].currency = e.target.value;
+      renderHead(marketKey);
+      applyFilters(marketKey, cols); // tambien dispara renderCharts y renderKpis con el set filtrado
+      if (hscrollSync[marketKey]) setTimeout(hscrollSync[marketKey], 0);
+    });
+  }
+}
+
+// Click any ticker (en las tablas por tipo o en general) -> salta a la
+// pestana de Transacciones filtrada por ese ticker.
+function goToTicker(ticker) {
+  selectTab('tx');
+  const searchEl = document.querySelector(`[data-role="search"][data-market="tx"]`);
+  searchEl.value = ticker;
+  applyFilters('tx', getCols('tx'));
+}
+
+pagesEl.addEventListener('click', (e) => {
+  const t = e.target.closest('.ticker-link');
+  if (t) { goToTicker(t.dataset.ticker); return; }
+
+  // click en una fila de la pestana general (no el Total) -> ir al detalle
+  const row = e.target.closest('tr[data-market-link]');
+  if (row) { selectTab(row.dataset.marketLink); }
+});
+
+const tabEls = {};
+
+function selectTab(key) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  tabEls[key].classList.add('active');
+  document.getElementById('page-'+key).classList.add('active');
+  // the page was display:none until now, so its scrollWidth/clientWidth
+  // were unreadable -- recompute the slider range now that it's visible.
+  if (hscrollSync[key]) setTimeout(hscrollSync[key], 0);
+}
+
+MARKET_KEYS.forEach((key, i) => {
+  const tab = document.createElement('div');
+  tab.className = 'tab' + (i===0 ? ' active' : '');
+  tab.textContent = TAB_LABELS[key];
+  tab.addEventListener('click', () => selectTab(key));
+  tabsEl.appendChild(tab);
+  tabEls[key] = tab;
+
+  const page = buildPage(key);
+  if (i===0) page.classList.add('active');
+  pagesEl.appendChild(page);
+});
+
+MARKET_KEYS.forEach(initPage);
+</script>
+</body>
+</html>
