@@ -20,10 +20,16 @@ Cada pestana muestra:
 - Buscador, filtro por sector, por tipo de instrumento, por anio de compra y
   por moneda, columnas ordenables por click, y graficos.
 
-El filtro de **anio de compra** esta en todas las pestanas y solo lista anios
-en los que hubo compras. Una posicion comprada en varios anios aparece en cada
-uno de ellos y se muestra entera: el filtro responde "que compre en 2024", no
-"cuanto de lo que tengo hoy corresponde a 2024".
+El filtro de **anio** esta en todas las pestanas y solo lista anios en los que
+hubo compras. No esconde filas: **recalcula el portfolio** usando unicamente
+las operaciones de ese anio. Si compraste SPY en 2025 y en 2026, al filtrar
+2025 ves las unidades, el costo promedio, lo invertido y el P&L
+correspondientes solo al tramo comprado en 2025.
+
+El costo de lo vendido se calcula recorriendo **toda** la historia en orden
+cronologico, asi que una venta de 2026 de unidades compradas en 2025 se valua
+con el costo real de esas unidades y no con costo cero. Por eso los numeros de
+cada anio suman exactamente el total del portfolio completo.
 
 ### Conversion ARS / USD
 

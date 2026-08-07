@@ -17,10 +17,17 @@ Cedears, Acciones Merval, RSU) mas una general, cada una con:
     filtro por anio de compra y filtro por moneda a mostrar, columnas
     ordenables por click, y graficos.
 
-  El filtro de anio de compra esta en todas las pestanas y lista solo los
-  anios en los que efectivamente hubo compras. Una posicion con compras en
-  varios anios aparece en cada uno de esos anios, y se muestra completa (no
-  se prorratea al tramo comprado ese anio).
+  El filtro de anio esta en todas las pestanas y lista solo los anios en los
+  que efectivamente hubo compras. NO esconde filas: recalcula el portfolio
+  entero usando unicamente las operaciones de ese anio. Al elegir 2025, las
+  unidades, el costo promedio, lo invertido y el P&L de cada posicion salen
+  solo de lo operado en 2025 -- si compraste SPY en 2025 y en 2026, en el
+  recorte 2025 ves solo el tramo de 2025.
+
+  El costo de las ventas se calcula igual recorriendo TODA la historia en
+  orden cronologico, asi que una venta de 2026 de unidades compradas en 2025
+  se valua con el costo real de esas unidades. Consecuencia practica: lo que
+  muestra cada anio suma exactamente el total del portfolio completo.
 
   RSU se trata exactamente igual que los demas portfolios (misma logica
   de costo promedio, P&L, dual-moneda); solo cambia que la hoja de origen es
@@ -85,6 +92,7 @@ import datetime as dt
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 import openpyxl
@@ -108,6 +116,14 @@ except ImportError:
 PPI_PUBLIC_KEY = os.environ.get("PPI_PUBLIC_KEY", "")
 PPI_PRIVATE_KEY = os.environ.get("PPI_PRIVATE_KEY", "")
 PPI_SANDBOX = os.environ.get("PPI_SANDBOX", "false").lower() == "true"
+
+# PPI limita la cantidad de pedidos por rato. Sin espaciarlos, una corrida de
+# ~50 llamadas seguidas pierde cerca de la mitad de las respuestas y los
+# instrumentos quedan "sin precio" sin ningun error visible. Con pausa entre
+# pedidos y reintentos se recuperan. Ajustables por variable de entorno.
+PPI_PAUSE = float(os.environ.get("PPI_PAUSE", "0.35"))      # segundos entre pedidos
+PPI_RETRIES = int(os.environ.get("PPI_RETRIES", "3"))       # intentos por pedido
+PPI_BACKOFF = float(os.environ.get("PPI_BACKOFF", "0.8"))   # espera inicial al reintentar
 
 MARKETS = ["usd", "cedears", "merval", "rsu", "bonds"]
 # native currency actually quoted/traded for each market
@@ -147,15 +163,58 @@ def get_ppi_client():
         return None
 
 
+_ppi_last_call = [0.0]
+
+
+def _ppi_wait():
+    """Espacia los pedidos a PPI para no chocar contra su limite de rate."""
+    if PPI_PAUSE <= 0:
+        return
+    transcurrido = time.monotonic() - _ppi_last_call[0]
+    if transcurrido < PPI_PAUSE:
+        time.sleep(PPI_PAUSE - transcurrido)
+    _ppi_last_call[0] = time.monotonic()
+
+
+def _ppi_retry(hacer_pedido):
+    """Corre hacer_pedido() con pausa previa y reintentos con backoff.
+
+    hacer_pedido devuelve (valor, motivo); si el motivo no es None, se
+    reintenta. Cubre tanto errores de red o de rate-limit (excepcion) como
+    respuestas vacias, que es como se manifiesta el throttling de PPI:
+    contesta bien pero sin precio."""
+    motivo = None
+    for intento in range(max(1, PPI_RETRIES)):
+        if intento:
+            time.sleep(PPI_BACKOFF * (2 ** (intento - 1)))
+        _ppi_wait()
+        try:
+            valor, motivo = hacer_pedido()
+        except Exception as e:
+            valor, motivo = None, f"error consultando PPI: {type(e).__name__}: {e}"
+        if motivo is None:
+            return valor, None
+    return None, f"{motivo} (tras {max(1, PPI_RETRIES)} intentos)"
+
+
 def fetch_ppi_price(ticker, tipo, settlement):
+    """Devuelve (precio, motivo_si_fallo). El motivo importa: cuando PPI no
+    cotiza algo hay que poder distinguir "el mercado esta cerrado" de "el
+    ticker esta mal escrito" o "me estan limitando por cantidad de pedidos".
+    Antes esto devolvia None a secas y los tres casos se veian igual."""
     client = get_ppi_client()
-    if not client or not tipo or not settlement:
-        return None
-    try:
+    if not client:
+        return None, "sin cliente PPI (sin credenciales o paquete ppi-client no instalado)"
+    if not tipo or not settlement:
+        return None, "falta Tipo PPI o Settlement PPI en la hoja instrumentos"
+
+    def pedido():
         data = client.marketdata.current(ticker, tipo, settlement)
-        price = data.get("price") if isinstance(data, dict) else None
+        if not isinstance(data, dict):
+            return None, f"PPI devolvio {type(data).__name__} en vez de un dict: {str(data)[:120]}"
+        price = data.get("price")
         if not price:
-            return None
+            return None, f"PPI respondio sin precio (campos: {sorted(data)[:8]})"
         price = float(price)
         # Los bonos (BONOS) cotizan en PPI "por cada 100 de valor nominal"
         # (convencion estandar de mercado), no por unidad -- si no se ajusta
@@ -164,9 +223,9 @@ def fetch_ppi_price(ticker, tipo, settlement):
         # cociente entre dos precios BONOS y el factor 100 se cancela solo.
         if tipo == "BONOS":
             price = price / 100.0
-        return price
-    except Exception:
-        return None
+        return price, None
+
+    return _ppi_retry(pedido)
 
 
 def fetch_yahoo_price(ticker):
@@ -221,20 +280,34 @@ def fetch_yahoo_price(ticker):
 
 
 def fetch_ppi_trend_30d(ticker, tipo, settlement):
-    """Best-effort 30-day % change using historical data. Returns None on any issue."""
+    """Best-effort 30-day history. Devuelve (variacion_%, serie_de_precios).
+
+    La serie es lo que dibuja la linea de tendencia en el dashboard; el
+    porcentaje se calcula de la misma serie y se conserva porque es lo que
+    ordena la columna y lo que va al Excel. (None, []) ante cualquier
+    problema."""
     client = get_ppi_client()
     if not client or not tipo or not settlement:
-        return None
-    try:
+        return None, []
+
+    def pedido():
         date_to = dt.datetime.now()
         date_from = date_to - dt.timedelta(days=30)
         hist = client.marketdata.search(ticker, tipo, settlement, date_from, date_to)
-        prices = [h["price"] for h in hist if h.get("price")]
+        prices = [float(h["price"]) for h in (hist or []) if h.get("price")]
         if len(prices) < 2:
-            return None
-        return (prices[-1] - prices[0]) / prices[0] * 100
-    except Exception:
-        return None
+            return None, "historico vacio o con menos de 2 puntos"
+        # se redondea para no inflar el JSON embebido en el HTML, y el % se
+        # calcula DESPUES de redondear para que el numero del tooltip sea
+        # exactamente el de los extremos de la linea que se dibuja.
+        prices = [round(p, 4) for p in prices]
+        if not prices[0]:
+            return None, "el primer precio del historico es cero"
+        pct = (prices[-1] - prices[0]) / prices[0] * 100
+        return (pct, prices), None
+
+    valor, _ = _ppi_retry(pedido)
+    return valor if valor else (None, [])
 
 
 def fetch_fx_rate_ppi():
@@ -248,7 +321,7 @@ def fetch_fx_rate_ppi():
     client = get_ppi_client()
     if not client:
         return None, "sin cliente PPI (sin credenciales o paquete ppi-client no instalado)"
-    try:
+    def pedido():
         ars = client.marketdata.current("AL30", "BONOS", "INMEDIATA")
         usd = client.marketdata.current("AL30D", "BONOS", "INMEDIATA")
         p_ars = ars.get("price") if isinstance(ars, dict) else None
@@ -258,8 +331,8 @@ def fetch_fx_rate_ppi():
         faltantes = [t for t, p in (("AL30", p_ars), ("AL30D", p_usd)) if not p]
         return None, (f"PPI no devolvio precio para {' y '.join(faltantes)} "
                        f"(probablemente fuera del horario de mercado)")
-    except Exception as e:
-        return None, f"error consultando PPI: {e}"
+
+    return _ppi_retry(pedido)
 
 
 def get_fx_rate(manual_fx):
@@ -347,13 +420,20 @@ def _year_of(v):
     return str(parsed[0]) if parsed else None
 
 
-def load_dual_positions(rows, native, fx_rate):
+def load_dual_positions(rows, native, fx_rate, scope_year=None):
     """Average-cost method tracking BOTH currencies at once, per transaction.
 
-    rows: iterable of (key, op, units, amount_native, amount_other_or_None, date).
+    rows: iterable of (key, op, units, amount_native, amount_other_or_None, date),
+    SIEMPRE la historia completa y en orden cronologico (ver _tx_rows).
     `native` is 'ars' or 'usd' -- the currency amount_native is denominated in.
-    `date` solo se usa para registrar en que anios se compro la posicion
-    (filtro "Anio de compra" del dashboard); no afecta ningun calculo.
+
+    scope_year: si se pasa un anio, se reporta unicamente lo operado en ese
+    anio, pero el costo promedio se sigue calculando recorriendo TODA la
+    historia. Esa es la diferencia clave: una venta de 2026 de unidades
+    compradas en 2025 se valua con el costo real que traian esas unidades, no
+    con costo cero. Por eso hay dos estados en paralelo: `real_*` avanza con
+    cada operacion (es la posicion de verdad), y los campos que se reportan
+    acumulan solo cuando la operacion cae dentro del anio pedido.
 
     When a transaction has a real recorded amount in the other currency
     (e.g. tx-cedears always has both @Local and @Origin; tx-merval has both
@@ -370,11 +450,14 @@ def load_dual_positions(rows, native, fx_rate):
         if not key or not op or units is None:
             continue
         pos = positions.setdefault(key, {
+            # posicion real, con toda la historia: de aca sale el costo promedio.
+            "real_units": 0.0, "real_cost_ars": 0.0, "real_cost_usd": 0.0,
+            # lo que se reporta: todo, o solo el anio pedido.
             "units": 0.0, "units_sold": 0.0,
             "cost_basis_ars": 0.0, "cost_basis_usd": 0.0,
             "cost_of_sales_ars": 0.0, "cost_of_sales_usd": 0.0,
             "income_from_sales_ars": 0.0, "income_from_sales_usd": 0.0,
-            "approx_used": False, "buy_years": set(),
+            "approx_used": False, "buy_years": set(), "oversold": False,
         })
         units = float(units)
         amt_native = float(amt_native) if amt_native is not None else 0.0
@@ -388,32 +471,47 @@ def load_dual_positions(rows, native, fx_rate):
             pos["approx_used"] = True
 
         amounts = {native: amt_native, other: amt_other}
+        year = _year_of(date)
+        in_scope = scope_year is None or year == scope_year
 
         if op == "BUY":
-            pos["units"] += units
-            pos["cost_basis_ars"] += amounts["ars"]
-            pos["cost_basis_usd"] += amounts["usd"]
-            year = _year_of(date)
+            pos["real_units"] += units
+            pos["real_cost_ars"] += amounts["ars"]
+            pos["real_cost_usd"] += amounts["usd"]
             if year:
                 pos["buy_years"].add(year)
+            if in_scope:
+                pos["units"] += units
+                pos["cost_basis_ars"] += amounts["ars"]
+                pos["cost_basis_usd"] += amounts["usd"]
         elif op == "SELL":
-            avg_ars = pos["cost_basis_ars"] / pos["units"] if pos["units"] > 1e-9 else 0.0
-            avg_usd = pos["cost_basis_usd"] / pos["units"] if pos["units"] > 1e-9 else 0.0
+            # El costo de lo vendido sale del promedio REAL a esa altura de la
+            # historia, aunque esas unidades se hayan comprado en otro anio.
+            if units > pos["real_units"] + 1e-9:
+                pos["oversold"] = True  # se vendio mas de lo que se habia comprado
+            avg_ars = pos["real_cost_ars"] / pos["real_units"] if pos["real_units"] > 1e-9 else 0.0
+            avg_usd = pos["real_cost_usd"] / pos["real_units"] if pos["real_units"] > 1e-9 else 0.0
             cost_ars = avg_ars * units
             cost_usd = avg_usd * units
-            pos["cost_basis_ars"] -= cost_ars
-            pos["cost_basis_usd"] -= cost_usd
-            pos["units"] -= units
-            pos["units_sold"] += units
-            pos["cost_of_sales_ars"] += cost_ars
-            pos["cost_of_sales_usd"] += cost_usd
-            pos["income_from_sales_ars"] += amounts["ars"]
-            pos["income_from_sales_usd"] += amounts["usd"]
+            pos["real_units"] -= units
+            pos["real_cost_ars"] -= cost_ars
+            pos["real_cost_usd"] -= cost_usd
+            if in_scope:
+                pos["units"] -= units
+                pos["units_sold"] += units
+                pos["cost_basis_ars"] -= cost_ars
+                pos["cost_basis_usd"] -= cost_usd
+                pos["cost_of_sales_ars"] += cost_ars
+                pos["cost_of_sales_usd"] += cost_usd
+                pos["income_from_sales_ars"] += amounts["ars"]
+                pos["income_from_sales_usd"] += amounts["usd"]
 
     out = {}
     for k, p in positions.items():
         p["dual_real"] = not p.pop("approx_used")
         p["buy_years"] = sorted(p["buy_years"])
+        for f in ("real_units", "real_cost_ars", "real_cost_usd"):
+            p.pop(f)
         out[k] = p
     return out
 
@@ -422,22 +520,35 @@ def _col(row, idx):
     return row[idx] if idx < len(row) else None
 
 
-def load_all_positions(wb, fx_rate):
+def _tx_rows(wb, sheet):
+    """Filas de una hoja tx-* ordenadas cronologicamente.
+
+    El costo promedio es dependiente del orden: una venta tiene que
+    procesarse DESPUES de las compras que la abastecen, si no se le asigna
+    un costo que todavia no existe. Las hojas no siempre vienen ordenadas por
+    fecha (tx-cedears no lo esta), asi que se ordenan aca en vez de confiar en
+    el orden de carga. Las filas sin fecha legible quedan al final, en el
+    orden en que estaban."""
+    rows = [r for r in wb[sheet].iter_rows(min_row=2, values_only=True) if r and r[0]]
+    return sorted(rows, key=lambda r: (_fmt_date(_col(r, 3)) == "", _fmt_date(_col(r, 3))))
+
+
+def load_all_positions(wb, fx_rate, year=None):
+    """year: si se pasa, cada posicion reporta solo lo operado en ese anio,
+    pero calculada sobre la historia completa (ver load_dual_positions)."""
     out = {}
 
-    tws = wb["tx-usd"]
-    tx_usd_rows = list(tws.iter_rows(min_row=2, values_only=True))
+    tx_usd_rows = _tx_rows(wb, "tx-usd")
     # col5 = Total amount (@Origin, USD) -- always present.
     # col6 = Total amount (ARS), optional -- only exists for entries where
     # you recorded the real ARS you paid. Historic tx-usd rows never had
     # this, so those fall back to today's fx_rate (flagged in the UI).
     out["usd"] = load_dual_positions(
         ((r[0], r[1], r[2], r[5], _col(r, 6), _col(r, 3)) for r in tx_usd_rows),
-        native="usd", fx_rate=fx_rate,
+        native="usd", fx_rate=fx_rate, scope_year=year,
     )
 
-    tws = wb["tx-cedears"]
-    tx_ced_rows = list(tws.iter_rows(min_row=2, values_only=True))
+    tx_ced_rows = _tx_rows(wb, "tx-cedears")
     # Total amount (@Local, ARS) = col 4 -- what actually trades on BYMA.
     # Total amount (@Origin, USD) = col 6 -- real USD cost recorded per trade.
     # Using both real amounts (instead of ratio math) avoids the P&L bug we
@@ -445,43 +556,40 @@ def load_all_positions(wb, fx_rate):
     # dividing by Ratio inflated results ~60x.
     out["cedears"] = load_dual_positions(
         ((r[0], r[1], r[2], r[4], r[6], _col(r, 3)) for r in tx_ced_rows),
-        native="ars", fx_rate=fx_rate,
+        native="ars", fx_rate=fx_rate, scope_year=year,
     )
 
-    tws = wb["tx-merval"]
-    tx_mer_rows = list(tws.iter_rows(min_row=2, values_only=True))
+    tx_mer_rows = _tx_rows(wb, "tx-merval")
     # col5 = Total amount (ARS) -- always present.
     # col6 = Total amount (USD), restored from the original sheet: it was
     # already computed historically (Total amount ARS / USD-ARS rate on the
     # day of the trade), so it's real, not an approximation.
     out["merval"] = load_dual_positions(
         ((r[0], r[1], r[2], r[5], _col(r, 6), _col(r, 3)) for r in tx_mer_rows),
-        native="ars", fx_rate=fx_rate,
+        native="ars", fx_rate=fx_rate, scope_year=year,
     )
 
     if "tx-rsu" in wb.sheetnames:
-        tws = wb["tx-rsu"]
-        tx_rsu_rows = list(tws.iter_rows(min_row=2, values_only=True))
+        tx_rsu_rows = _tx_rows(wb, "tx-rsu")
         # mismo layout que tx-usd: col5 = Total amount (@Origin, USD) siempre
         # presente (costo base = FMV al momento del vesting), col6 = Total
         # amount (ARS) opcional.
         out["rsu"] = load_dual_positions(
             ((r[0], r[1], r[2], r[5], _col(r, 6), _col(r, 3)) for r in tx_rsu_rows),
-            native="usd", fx_rate=fx_rate,
+            native="usd", fx_rate=fx_rate, scope_year=year,
         )
     else:
         out["rsu"] = {}
 
     if "tx-bonds" in wb.sheetnames:
-        tws = wb["tx-bonds"]
-        tx_bonds_rows = list(tws.iter_rows(min_row=2, values_only=True))
+        tx_bonds_rows = _tx_rows(wb, "tx-bonds")
         # mismo layout que tx-merval: col5 = Total amount (ARS) siempre
         # presente, col6 = Total amount (USD) real (bonos como AO28 cotizan
         # y liquidan en las dos monedas en BYMA, asi que ambos montos vienen
         # de la operacion real, no aproximados).
         out["bonds"] = load_dual_positions(
             ((r[0], r[1], r[2], r[5], _col(r, 6), _col(r, 3)) for r in tx_bonds_rows),
-            native="ars", fx_rate=fx_rate,
+            native="ars", fx_rate=fx_rate, scope_year=year,
         )
     else:
         out["bonds"] = {}
@@ -557,7 +665,7 @@ def resolve_price_dual(key, market, meta, fx_rate):
     native = NATIVE_CURRENCY[market]
 
     debug_note = None
-    live = fetch_ppi_price(key, tipo, settlement)
+    live, live_err = fetch_ppi_price(key, tipo, settlement)
     yahoo = yahoo_err = None
     if live is None and native == "usd":
         yahoo, yahoo_err = fetch_yahoo_price(key)
@@ -573,9 +681,19 @@ def resolve_price_dual(key, market, meta, fx_rate):
         native_price, source = float(m["manual_price"]), "manual"
     else:
         native_price, source = None, "no disponible"
+        # se juntan los motivos de TODAS las fuentes que se intentaron. Antes
+        # esto solo se completaba para instrumentos en USD, asi que
+        # justamente los cedears/acciones/bonos en ARS quedaban sin ninguna
+        # pista de por que no cotizaron.
+        motivos = []
+        if live_err:
+            motivos.append(f"PPI: {live_err}")
         if native == "usd":
-            debug_note = yahoo_err or ("yfinance no esta instalado (pip install yfinance)"
-                                        if not HAVE_YFINANCE else None)
+            if yahoo_err:
+                motivos.append(f"Yahoo: {yahoo_err}")
+            elif not HAVE_YFINANCE:
+                motivos.append("yfinance no esta instalado (pip install yfinance)")
+        debug_note = " | ".join(motivos) or None
 
     price_ars = price_usd = None
     if native == "ars":
@@ -590,14 +708,23 @@ def resolve_price_dual(key, market, meta, fx_rate):
     return price_ars, price_usd, source, debug_note
 
 
-def build_market_report(market, positions, meta, fx_rate):
+def build_market_report(market, positions, meta, fx_rate, price_cache=None):
+    """price_cache: dict compartido {(market, key): (...)} para no volver a
+    pedirle a PPI/Yahoo el mismo precio. El dashboard arma un reporte por cada
+    anio ademas del completo, y el precio de hoy es el mismo en todos."""
     rows = []
     for key, pos in positions.items():
         if pos["units"] <= 1e-9 and pos["units_sold"] <= 1e-9:
             continue
         m = meta.get(key, {})
-        price_ars, price_usd, source, price_debug_note = resolve_price_dual(key, market, meta, fx_rate)
-        trend = fetch_ppi_trend_30d(key, m.get("tipo_ppi"), m.get("settlement"))
+        cached = price_cache.get((market, key)) if price_cache is not None else None
+        if cached is None:
+            price_ars, price_usd, source, price_debug_note = resolve_price_dual(key, market, meta, fx_rate)
+            trend, trend_series = fetch_ppi_trend_30d(key, m.get("tipo_ppi"), m.get("settlement"))
+            if price_cache is not None:
+                price_cache[(market, key)] = (price_ars, price_usd, source, price_debug_note, trend, trend_series)
+        else:
+            price_ars, price_usd, source, price_debug_note, trend, trend_series = cached
         units = max(pos["units"], 0.0)
 
         def per_currency(cost_basis, cost_of_sales, income_from_sales, price):
@@ -624,8 +751,10 @@ def build_market_report(market, positions, meta, fx_rate):
             "key": key, "market": market, "name": m.get("name", key),
             "sector": m.get("sector") or "-", "ratio": m.get("ratio") or "",
             "instrument_type": m.get("instrument_type") or "-",
-            "units": units, "units_sold": pos["units_sold"], "trend_30d": trend,
+            "units": units, "units_sold": pos["units_sold"],
+            "trend_30d": trend, "trend_series": trend_series,
             "buy_years": pos.get("buy_years", []),
+            "oversold": pos.get("oversold", False),
             "price_source": source, "fx_approx": not pos["dual_real"],
             "native_currency": NATIVE_CURRENCY[market],
             "price_debug_note": price_debug_note,
@@ -676,8 +805,21 @@ def build_all_reports(xlsx_path):
     config = load_config(wb)
     fx_rate, fx_source = get_fx_rate(config.get("manual_fx"))
     positions = load_all_positions(wb, fx_rate)
-    reports = {m: build_market_report(m, positions[m], meta, fx_rate) for m in MARKETS}
+    price_cache = {}
+    reports = {m: build_market_report(m, positions[m], meta, fx_rate, price_cache) for m in MARKETS}
     transactions = collect_transactions(wb)
+
+    # Un juego de reportes por cada anio con compras, recalculado desde cero
+    # con SOLO las operaciones de ese anio. Es lo que consume el filtro de
+    # anio del dashboard: al elegir 2025 no se esconden posiciones, se
+    # recalcula todo (unidades, costo promedio, invertido, P&L) como si el
+    # portfolio fuera unicamente lo operado en 2025. Reusa price_cache, asi
+    # que no cuesta ni un pedido extra a PPI/Yahoo.
+    years = sorted({y for m in MARKETS for p in positions[m].values() for y in p["buy_years"]}, reverse=True)
+    reports_by_year = {}
+    for y in years:
+        pos_y = load_all_positions(wb, fx_rate, year=y)
+        reports_by_year[y] = {m: build_market_report(m, pos_y[m], meta, fx_rate, price_cache) for m in MARKETS}
 
     price_lookup = _build_price_lookup(reports)
     for t in transactions:
@@ -694,7 +836,7 @@ def build_all_reports(xlsx_path):
                 if (price and current_price is not None) else None
             )
 
-    return reports, fx_rate, fx_source, transactions
+    return reports, reports_by_year, fx_rate, fx_source, transactions
 
 
 # ---------------------------------------------------------------------------
@@ -908,14 +1050,19 @@ def _market_kpis(rows):
     return kpis
 
 
-def render_html(reports, fx_rate, fx_source, transactions, out_path):
+def render_html(reports, reports_by_year, fx_rate, fx_source, transactions, out_path):
     payload = {"markets": {}, "general": [], "transactions": transactions,
+               "years": sorted(reports_by_year, reverse=True),
                "fx_rate": fx_rate, "fx_source": fx_source}
     for market, rows in reports.items():
         payload["markets"][market] = {
             "label": MARKET_LABELS[market],
             "kpis": _market_kpis(rows),
             "rows": rows,
+            # mismo contenido que "rows"/"kpis" pero recalculado con solo las
+            # operaciones de cada anio; el filtro de anio cambia de juego.
+            "rows_by_year": {y: reports_by_year[y][market] for y in reports_by_year},
+            "kpis_by_year": {y: _market_kpis(reports_by_year[y][market]) for y in reports_by_year},
         }
         payload["general"].extend(rows)
 
@@ -955,6 +1102,11 @@ HTML_PAGE = """<!DOCTYPE html>
   .kpi .label { color:var(--muted); font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; }
   .kpi .val { font-size:18px; font-weight:600; margin-top:4px; }
   .pos { color:var(--green); } .neg { color:var(--red); }
+  /* linea de tendencia 30d: hereda el color del signo via currentColor */
+  .spark { display:block; overflow:visible; }
+  .spark polyline { fill:none; stroke:currentColor; stroke-width:1.5; stroke-linejoin:round; stroke-linecap:round; }
+  .spark circle { fill:currentColor; stroke:none; }
+  .spark-flat { color:var(--muted); }
   .unpriced-note { color:var(--muted); font-size:12px; margin-bottom:6px; }
   .approx-note { color:var(--muted); font-size:11.5px; margin:-4px 0 16px; font-style:italic; }
   .charts { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:22px; }
@@ -1043,7 +1195,9 @@ const COLUMNS_BASE = [
   {key:'instrument_type', label:'Tipo'},
   {key:'units', label:'Unid.', num:true},
   {key:'units_sold', label:'Unid. Vend.', num:true},
-  {key:'trend_30d', label:'Tend. 30d %', num:true, pct:true},
+  // se dibuja como linea (spark), pero el valor sigue siendo el % -- es lo
+  // que ordena la columna al hacer click y lo que se ve en el tooltip.
+  {key:'trend_30d', label:'Tend. 30d', num:true, pct:true, spark:true},
 ];
 const COLUMNS_DUAL = [
   {key:'pct_portfolio', label:'% Portfolio', num:true, pct:true, dual:true},
@@ -1098,14 +1252,19 @@ function getCols(marketKey) {
   return [...COLUMNS_BASE, ...COLUMNS_DUAL];
 }
 
-// Filas de un portfolio tal como las ve la pestana general: completas, o
-// solo las compradas en el anio elegido si ese filtro esta activo. Los KPIs
-// de la general se recalculan desde aca (en vez de usar los precalculados de
-// DATA.markets[m].kpis) para que respeten el filtro de anio.
+// Filas de un portfolio para un anio dado. NO es un subconjunto de las filas
+// completas: es el portfolio recalculado en Python usando solo las
+// operaciones de ese anio, asi que unidades, costo promedio, invertido y P&L
+// corresponden unicamente a lo comprado/vendido en ese anio. '' = todo.
+function marketRows(m, year) {
+  if (!year) return DATA.markets[m].rows;
+  return DATA.markets[m].rows_by_year[year] || [];
+}
+
+// Filas de un portfolio tal como las ve la pestana general, respetando su
+// propio filtro de anio.
 function generalMarketRows(m) {
-  const year = currentYear('general');
-  const rows = DATA.markets[m].rows;
-  return year ? rows.filter(r => matchesBuyYear(r, year)) : rows;
+  return marketRows(m, currentYear('general'));
 }
 
 function _unpricedCount(rows) {
@@ -1200,17 +1359,42 @@ function uniqueSorted(rows, key) {
   return [...new Set(rows.map(r => r[key]).filter(v => v !== null && v !== undefined && v !== ''))].sort();
 }
 
-// Anios en los que se compro algo, del mas reciente al mas viejo. Una
-// posicion puede tener compras en varios anios, asi que buy_years es una
-// lista por fila y hay que aplanarla antes de deduplicar.
-function uniqueYears(rows) {
-  return [...new Set(rows.flatMap(r => r.buy_years || []))].sort().reverse();
+// "Instrumentos sin precio" tiene que seguir al recorte que se esta viendo
+// (anio + busqueda + sector), no al total del portfolio.
+function renderUnpricedNote(marketKey, filteredRows) {
+  const el = document.getElementById(`unpricednote-${marketKey}`);
+  if (!el) return;
+  const n = marketKey === 'general' ? computeGeneralUnpriced() : _unpricedCount(filteredRows);
+  el.textContent = n > 0 ? `Instrumentos sin precio: ${n}` : '';
 }
 
-// Anios con compras en cualquier portfolio: lo usan la pestana general y la
-// de transacciones, que no corresponden a un solo tipo de instrumento.
+// Aviso de inconsistencia en la planilla: se vendieron mas unidades de las
+// que se habian comprado, asi que parte de esa venta no tiene costo de compra
+// y su P&L realizado queda inflado. No tiene que ver con el filtro de anio.
+function renderScopeNote(marketKey, filteredRows) {
+  const el = document.getElementById(`scopenote-${marketKey}`);
+  if (!el) return;
+  const source = marketKey === 'general'
+    ? PORTFOLIO_KEYS.flatMap(m => generalMarketRows(m))
+    : filteredRows;
+  const afectados = [...new Set(source.filter(r => r.oversold).map(r => r.key))];
+  if (!afectados.length) { el.style.display = 'none'; el.textContent = ''; return; }
+  el.style.display = '';
+  el.textContent = `Revisa las transacciones de ${afectados.join(', ')}: figuran mas unidades vendidas que compradas, `
+    + `asi que parte de esa venta queda sin costo de compra y su P&L realizado aparece inflado.`;
+}
+
+// Anios con compras en cualquier portfolio (ya vienen ordenados del mas
+// reciente al mas viejo desde Python). Los usan la pestana general y la de
+// transacciones, que no corresponden a un solo tipo de instrumento.
 function allBuyYears() {
-  return uniqueYears(PORTFOLIO_KEYS.flatMap(m => DATA.markets[m].rows));
+  return DATA.years;
+}
+
+// Anios en los que ESE portfolio tuvo movimientos, para no ofrecer opciones
+// que dejarian la tabla vacia.
+function marketYears(m) {
+  return DATA.years.filter(y => (DATA.markets[m].rows_by_year[y] || []).length > 0);
 }
 
 function yearSelectHtml(marketKey, years) {
@@ -1251,10 +1435,8 @@ function buildPage(marketKey) {
   } else if (isGeneral) {
     const anyApprox = PORTFOLIO_KEYS.some(m => DATA.markets[m].rows.some(r => r.fx_approx));
     html += `<div id="kpis-${marketKey}"></div>`;
-    const unpriced = computeGeneralUnpriced();
-    if (unpriced > 0) {
-      html += `<div class="unpriced-note">${unpriced} instrumento(s) sin precio actual disponible.</div>`;
-    }
+    html += `<div class="unpriced-note" id="unpricednote-${marketKey}"></div>`;
+    html += `<div class="approx-note" id="scopenote-${marketKey}" style="display:none"></div>`;
     if (anyApprox) {
       html += `<div class="approx-note">Uno o mas portfolios tienen posiciones con montos aproximados en la moneda no nativa (se convirtieron al tipo de cambio de HOY para esa operacion puntual, no historico). Mira el detalle en la pestana de cada tipo de instrumento.</div>`;
     }
@@ -1269,7 +1451,8 @@ function buildPage(marketKey) {
     const rows = DATA.markets[marketKey].rows;
     const hasApprox = rows.some(r => r.fx_approx);
     html += `<div id="kpis-${marketKey}"></div>`;
-    html += `<div class="unpriced-note">Instrumentos sin precio: ${DATA.markets[marketKey].kpis.unpriced}</div>`;
+    html += `<div class="unpriced-note" id="unpricednote-${marketKey}"></div>`;
+    html += `<div class="approx-note" id="scopenote-${marketKey}" style="display:none"></div>`;
     if (hasApprox) {
       html += `<div class="approx-note">Algunas operaciones de esta posicion no tienen cargado el monto en la otra moneda (columna opcional en la hoja de transacciones), asi que para esas puntualmente se aproximo al tipo de cambio de HOY en vez del historico de esa operacion. El resto usa el monto real que cargaste.</div>`;
     }
@@ -1290,7 +1473,7 @@ function buildPage(marketKey) {
         <option value="">Todos los tipos</option>
         ${instTypeOptions.map(t => `<option value="${t}">${t}</option>`).join('')}
       </select>
-      ${yearSelectHtml(marketKey, uniqueYears(rows))}
+      ${yearSelectHtml(marketKey, marketYears(marketKey))}
       <select data-role="currency" data-market="${marketKey}">
         <option value="ars" ${defaultCurrency==='ars'?'selected':''}>Moneda: ARS</option>
         <option value="usd" ${defaultCurrency==='usd'?'selected':''}>Moneda: USD</option>
@@ -1363,6 +1546,26 @@ function wireHScroll(marketKey) {
   wrap.addEventListener('scroll', () => { slider.value = wrap.scrollLeft; }, { passive: true });
 }
 
+// Linea de tendencia de 30 dias como SVG inline. La escala es relativa a
+// CADA instrumento (su propio minimo y maximo), asi que la forma se lee bien
+// aunque un papel cotice a 5 y otro a 70000; lo que NO se puede hacer es
+// comparar la altura entre filas. El punto final marca donde termina.
+function sparkline(series, pct) {
+  if (!series || series.length < 2) return '—';
+  const w = 72, h = 22, pad = 3;
+  const min = Math.min(...series), max = Math.max(...series);
+  const span = (max - min) || 1;          // serie plana: queda la linea al medio
+  const dx = (w - pad * 2) / (series.length - 1);
+  const y = p => (max === min ? h / 2 : h - pad - ((p - min) / span) * (h - pad * 2));
+  const pts = series.map((p, i) => `${(pad + i * dx).toFixed(1)},${y(p).toFixed(1)}`);
+  const cls = pct > 0 ? 'pos' : (pct < 0 ? 'neg' : 'spark-flat');
+  const last = pts[pts.length - 1].split(',');
+  return `<svg class="spark ${cls}" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">`
+    + `<polyline points="${pts.join(' ')}"/>`
+    + `<circle cx="${last[0]}" cy="${last[1]}" r="1.8"/>`
+    + `</svg>`;
+}
+
 function renderRows(marketKey, rows, cols) {
   const currency = tableState[marketKey].currency;
   const tbody = document.querySelector(`#table-${marketKey} tbody`);
@@ -1382,6 +1585,7 @@ function renderRows(marketKey, rows, cols) {
     if (c.key === 'label') return `<td><strong>${v}</strong></td>`;
     if (c.key === 'market') return `<td>${TAB_LABELS[v] || v}</td>`;
     if (c.key === 'op') return `<td class="${v==='BUY'?'pos':(v==='SELL'?'neg':'')}">${v}</td>`;
+    if (c.spark) return `<td class="${plClass(v)}" title="${v===null||v===undefined?'sin datos':fmtPct(v)+' en 30 dias'}">${sparkline(r.trend_series, v)}</td>`;
     if (v === null || v === undefined) return `<td>—</td>`;
     if (c.pct) return `<td class="${c.pl?plClass(v):''}">${fmtPct(v)}</td>`;
     if (c.pl) return `<td class="${plClass(v)}">${fmt(v)}</td>`;
@@ -1420,29 +1624,21 @@ function filterRows(marketKey) {
       return true;
     });
   }
-  const allRows = DATA.markets[marketKey].rows;
+  // el filtro de anio no descarta filas: cambia el juego de filas por el
+  // recalculado con solo las operaciones de ese anio.
+  const allRows = marketRows(marketKey, currentYear(marketKey));
   const searchEl = document.querySelector(`[data-role="search"][data-market="${marketKey}"]`);
   const sectorEl = document.querySelector(`[data-role="sector"][data-market="${marketKey}"]`);
   const instTypeEl = document.querySelector(`[data-role="insttype"][data-market="${marketKey}"]`);
   const search = (searchEl.value || '').toLowerCase();
   const sector = sectorEl.value;
   const instType = instTypeEl ? instTypeEl.value : '';
-  const year = currentYear(marketKey);
   return allRows.filter(r => {
     if (search && !(`${r.key} ${r.name}`.toLowerCase().includes(search))) return false;
     if (sector && r.sector !== sector) return false;
     if (instType && r.instrument_type !== instType) return false;
-    if (year && !matchesBuyYear(r, year)) return false;
     return true;
   });
-}
-
-// Una posicion pasa el filtro si tuvo AL MENOS UNA compra en ese anio. Se
-// muestra entera (todas las unidades y todo el P&L), no prorrateada al
-// tramo comprado ese anio: el filtro responde "que compre en 2024", no
-// "cuanto de lo que tengo hoy corresponde a 2024".
-function matchesBuyYear(row, year) {
-  return (row.buy_years || []).includes(year);
 }
 
 function applyFilters(marketKey, cols) {
@@ -1469,7 +1665,11 @@ function applyFilters(marketKey, cols) {
   // los graficos y las pills de KPIs (no existen en Transacciones) se
   // recalculan con el mismo subconjunto filtrado que se ve en la tabla.
   if (marketKey !== 'general' && marketKey !== 'tx') renderCharts(marketKey, rows);
-  if (marketKey !== 'tx') renderKpis(marketKey, rows);
+  if (marketKey !== 'tx') {
+    renderKpis(marketKey, rows);
+    renderUnpricedNote(marketKey, rows);
+    renderScopeNote(marketKey, rows);
+  }
 }
 
 const tableState = {};
@@ -1619,9 +1819,9 @@ def main():
                      help="Si se pasa, ademas genera un xlsx con la misma info (opcional).")
     args = ap.parse_args()
 
-    reports, fx_rate, fx_source, transactions = build_all_reports(args.xlsx_path)
+    reports, reports_by_year, fx_rate, fx_source, transactions = build_all_reports(args.xlsx_path)
 
-    render_html(reports, fx_rate, fx_source, transactions, args.out_html)
+    render_html(reports, reports_by_year, fx_rate, fx_source, transactions, args.out_html)
 
     if args.out_xlsx:
         out_wb = openpyxl.Workbook()
