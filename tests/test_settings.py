@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from portfolio_dashboard.settings import Settings
+from portfolio.settings import Settings
 
 
 def test_reads_every_value_from_the_environment():

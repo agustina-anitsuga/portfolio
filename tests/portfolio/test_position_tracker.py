@@ -4,8 +4,8 @@ import datetime as dt
 import pytest
 
 from doubles import CEDEARS_MARKET, USD_MARKET, make_transaction
-from portfolio_dashboard.market import ARS, USD
-from portfolio_dashboard.portfolio.position_tracker import PositionTracker
+from portfolio.market import ARS, USD
+from portfolio.portfolio.position_tracker import PositionTracker
 
 
 def track(transactions, fx, scope_year=None):
@@ -139,8 +139,8 @@ def test_purchase_years_are_recorded_even_outside_the_scope(fx):
 
 
 def test_track_all_covers_every_market(fx, workbook_path):
-    from portfolio_dashboard.market import Market
-    from portfolio_dashboard.workbook.portfolio_workbook import PortfolioWorkbook
+    from portfolio.market import Market
+    from portfolio.workbook.portfolio_workbook import PortfolioWorkbook
     positions = PositionTracker(fx).track_all(PortfolioWorkbook(workbook_path))
     assert set(positions) == set(Market.keys())
     assert positions["usd"]["AAA"].units == 6

@@ -2,9 +2,9 @@
 import pytest
 
 from doubles import USD_MARKET, make_holding, make_instrument, make_position, make_quote
-from portfolio_dashboard.market import ARS, USD
-from portfolio_dashboard.marketdata.quote import Quote
-from portfolio_dashboard.portfolio.market_report import MarketReport
+from portfolio.market import ARS, USD
+from portfolio.marketdata.quote import Quote
+from portfolio.portfolio.market_report import MarketReport
 
 
 def holding(key="AAA", value_ars=1000.0, cost_ars=500.0):

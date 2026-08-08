@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import openpyxl
 
-from portfolio_dashboard.workbook.config_sheet import ConfigSheet
+from portfolio.workbook.config_sheet import ConfigSheet
 
 
 def config_with(rows, name="config"):

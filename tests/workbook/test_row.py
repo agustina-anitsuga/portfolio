@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from portfolio_dashboard.workbook.row import cell, number
+from portfolio.workbook.row import cell, number
 
 
 def test_cell_reads_the_requested_position():

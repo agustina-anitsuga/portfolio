@@ -83,7 +83,7 @@ python3 generate_dashboard.py portfolio.xlsx --out-html portfolio.html
 | Archivo | Descripcion |
 | --- | --- |
 | `generate_dashboard.py` | Punto de entrada del generador |
-| `portfolio_dashboard/` | Implementacion (ver detalle abajo) |
+| `portfolio/` | Implementacion (ver detalle abajo) |
 | `portfolio.xlsx` | Planilla de transacciones (entrada) |
 | `portfolio.html` | Dashboard generado (salida) |
 

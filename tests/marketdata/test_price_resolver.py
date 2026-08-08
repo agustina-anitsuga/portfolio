@@ -3,13 +3,13 @@ import pytest
 
 from doubles import (CEDEARS_MARKET, RSU_MARKET, USD_MARKET, FakePpi, FakeYahoo,
                      make_instrument)
-from portfolio_dashboard.marketdata.price_resolver import (MANUAL_SOURCE, PPI_SOURCE,
-                                                           YAHOO_SOURCE, PriceResolver)
-from portfolio_dashboard.marketdata.trend import Trend
+from portfolio.marketdata.price_resolver import (MANUAL_SOURCE, PPI_SOURCE, YAHOO_SOURCE,
+                                                 PriceResolver)
+from portfolio.marketdata.trend import Trend
 
 
 def resolver(ppi=None, yahoo=None, fx=None):
-    from portfolio_dashboard.marketdata.fx_rate import FxRate
+    from portfolio.marketdata.fx_rate import FxRate
     return PriceResolver(ppi or FakePpi(), yahoo or FakeYahoo(), fx or FxRate(1000.0, "test"))
 
 

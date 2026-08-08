@@ -10,13 +10,13 @@ import datetime as dt
 
 import openpyxl
 
-from portfolio_dashboard.market import ARS, USD, Market
-from portfolio_dashboard.marketdata.quote import Quote
-from portfolio_dashboard.marketdata.trend import Trend
-from portfolio_dashboard.portfolio.holding import Holding
-from portfolio_dashboard.portfolio.position import Position
-from portfolio_dashboard.workbook.instrument import Instrument
-from portfolio_dashboard.workbook.transaction import Transaction
+from portfolio.market import ARS, USD, Market
+from portfolio.marketdata.quote import Quote
+from portfolio.marketdata.trend import Trend
+from portfolio.portfolio.holding import Holding
+from portfolio.portfolio.position import Position
+from portfolio.workbook.instrument import Instrument
+from portfolio.workbook.transaction import Transaction
 
 USD_MARKET = Market.get("usd")
 CEDEARS_MARKET = Market.get("cedears")

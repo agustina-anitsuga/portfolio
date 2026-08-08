@@ -3,11 +3,11 @@ import openpyxl
 import pytest
 
 from doubles import USD_MARKET, make_holding, make_instrument
-from portfolio_dashboard.cli import DashboardCli, main
-from portfolio_dashboard.market import Market
-from portfolio_dashboard.marketdata.fx_rate import FxRate
-from portfolio_dashboard.portfolio.market_report import MarketReport
-from portfolio_dashboard.portfolio.snapshot import PortfolioSnapshot
+from portfolio.cli import DashboardCli, main
+from portfolio.market import Market
+from portfolio.marketdata.fx_rate import FxRate
+from portfolio.portfolio.market_report import MarketReport
+from portfolio.portfolio.snapshot import PortfolioSnapshot
 
 
 class FakeApp:
@@ -84,6 +84,6 @@ def test_the_spreadsheet_path_is_required(cli):
 
 def test_main_builds_the_real_app_by_default(tmp_path, monkeypatch, capsys):
     """Only the wiring is checked here; the app itself is tested separately."""
-    import portfolio_dashboard.cli as module
+    import portfolio.cli as module
     monkeypatch.setattr(module, "PortfolioApp", FakeApp)
     assert main(["portfolio.xlsx", "--out-html", str(tmp_path / "d.html")]) == 0

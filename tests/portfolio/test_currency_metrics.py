@@ -2,9 +2,9 @@
 import pytest
 
 from doubles import make_position
-from portfolio_dashboard.market import ARS, USD
-from portfolio_dashboard.portfolio.currency_metrics import CurrencyMetrics
-from portfolio_dashboard.portfolio.position import Position
+from portfolio.market import ARS, USD
+from portfolio.portfolio.currency_metrics import CurrencyMetrics
+from portfolio.portfolio.position import Position
 
 
 def metrics(position=None, currency=ARS, units=10.0, price=200.0):

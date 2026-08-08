@@ -4,9 +4,9 @@ import datetime as dt
 import pytest
 
 from doubles import FakeSession
-from portfolio_dashboard.marketdata.ppi_market_data import (MISSING_INSTRUMENT_META,
-                                                            TREND_DAYS, PpiMarketData)
-from portfolio_dashboard.marketdata.ppi_session import NO_CLIENT
+from portfolio.marketdata.ppi_market_data import (MISSING_INSTRUMENT_META, TREND_DAYS,
+                                                  PpiMarketData)
+from portfolio.marketdata.ppi_session import NO_CLIENT
 
 
 class FakeMarketData:

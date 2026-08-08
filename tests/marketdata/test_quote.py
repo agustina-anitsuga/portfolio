@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 import pytest
 
-from portfolio_dashboard.market import ARS, USD
-from portfolio_dashboard.marketdata.fx_rate import FxRate
-from portfolio_dashboard.marketdata.quote import UNAVAILABLE, Quote
+from portfolio.market import ARS, USD
+from portfolio.marketdata.fx_rate import FxRate
+from portfolio.marketdata.quote import UNAVAILABLE, Quote
 
 FX = FxRate(1000.0, "test")
 

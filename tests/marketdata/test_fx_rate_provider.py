@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from doubles import FakePpi
-from portfolio_dashboard.marketdata.fx_rate_provider import (LIVE_SOURCE, MANUAL_SOURCE,
-                                                             FxRateProvider)
+from portfolio.marketdata.fx_rate_provider import LIVE_SOURCE, MANUAL_SOURCE, FxRateProvider
 
 
 def test_prefers_the_live_mep_rate():

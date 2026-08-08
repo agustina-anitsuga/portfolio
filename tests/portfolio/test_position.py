@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import pytest
 
-from portfolio_dashboard.market import ARS, USD
-from portfolio_dashboard.portfolio.position import Position
+from portfolio.market import ARS, USD
+from portfolio.portfolio.position import Position
 
 ONE_UNIT = {ARS: 1000.0, USD: 1.0}
 

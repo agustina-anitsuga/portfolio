@@ -4,10 +4,10 @@ import datetime as dt
 import pytest
 
 from doubles import FakePpi, FakeYahoo, write_workbook
-from portfolio_dashboard.market import Market
-from portfolio_dashboard.marketdata.price_resolver import PriceResolver
-from portfolio_dashboard.portfolio.snapshot_builder import SnapshotBuilder
-from portfolio_dashboard.workbook.portfolio_workbook import PortfolioWorkbook
+from portfolio.market import Market
+from portfolio.marketdata.price_resolver import PriceResolver
+from portfolio.portfolio.snapshot_builder import SnapshotBuilder
+from portfolio.workbook.portfolio_workbook import PortfolioWorkbook
 
 INSTRUMENTS = [("AAA", "Alpha Corp", "ACCIONES-USA", "A-48HS", 1, "Technology", "USD", None, "Stock")]
 

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import pytest
 
-from portfolio_dashboard.marketdata import yahoo_market_data as module
-from portfolio_dashboard.marketdata.yahoo_market_data import NOT_INSTALLED, YahooMarketData
+from portfolio.marketdata import yahoo_market_data as module
+from portfolio.marketdata.yahoo_market_data import NOT_INSTALLED, YahooMarketData
 
 
 class FakeHistory:

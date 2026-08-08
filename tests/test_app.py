@@ -4,8 +4,8 @@ import datetime as dt
 import pytest
 
 from doubles import FakePpi, FakeYahoo, write_workbook
-from portfolio_dashboard.app import PortfolioApp
-from portfolio_dashboard.market import Market
+from portfolio.app import PortfolioApp
+from portfolio.market import Market
 
 INSTRUMENTS = [("AAA", "Alpha Corp", "ACCIONES-USA", "A-48HS", 1, "Technology", "USD", None, "Stock")]
 

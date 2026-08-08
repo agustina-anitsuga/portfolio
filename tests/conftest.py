@@ -6,8 +6,8 @@ import datetime as dt
 import pytest
 
 from doubles import FakePpi, FakeYahoo, make_holding, write_workbook
-from portfolio_dashboard.marketdata.fx_rate import FxRate
-from portfolio_dashboard.settings import Settings
+from portfolio.marketdata.fx_rate import FxRate
+from portfolio.settings import Settings
 
 
 @pytest.fixture

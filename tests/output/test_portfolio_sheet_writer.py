@@ -2,7 +2,7 @@
 import openpyxl
 import pytest
 
-from portfolio_dashboard.output.portfolio_sheet_writer import COLUMNS, PortfolioSheetWriter
+from portfolio.output.portfolio_sheet_writer import COLUMNS, PortfolioSheetWriter
 
 ROW = {
     "key": "AAA", "name": "Alpha Corp", "sector": "Technology", "units": 10.0,

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs perl -pi -e 's/\\\\bportfolio_dashboard\\\\b/portfolio/g')",
+      "Bash(.venv/bin/python -m flake8 --max-line-length=110 portfolio tests generate_dashboard.py)"
+    ]
+  }
+}

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import pytest
 
-from portfolio_dashboard.market import ARS, CURRENCIES, USD, Market, other_currency
+from portfolio.market import ARS, CURRENCIES, USD, Market, other_currency
 
 
 def test_other_currency_flips_between_the_two():

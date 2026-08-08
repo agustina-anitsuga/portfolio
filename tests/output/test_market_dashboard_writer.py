@@ -3,8 +3,8 @@ import openpyxl
 import pytest
 
 from doubles import USD_MARKET, make_holding, make_instrument, make_position, make_quote
-from portfolio_dashboard.output.market_dashboard_writer import MarketDashboardWriter
-from portfolio_dashboard.portfolio.market_report import MarketReport
+from portfolio.output.market_dashboard_writer import MarketDashboardWriter
+from portfolio.portfolio.market_report import MarketReport
 
 
 def holding(key="AAA", cost_ars=1000.0, price_ars=200.0):
@@ -59,7 +59,7 @@ def test_the_table_is_capped_at_twelve_positions():
 
 
 def test_an_unpriced_position_contributes_zero_to_the_chart_table():
-    from portfolio_dashboard.marketdata.quote import Quote
+    from portfolio.marketdata.quote import Quote
     unpriced = make_holding(instrument=make_instrument("ZZZ"), quote=Quote.unavailable("sin datos"))
     sheet = write([unpriced])
     assert sheet.cell(row=4, column=8).value == 0

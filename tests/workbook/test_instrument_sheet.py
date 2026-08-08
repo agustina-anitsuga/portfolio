@@ -2,7 +2,7 @@
 import openpyxl
 import pytest
 
-from portfolio_dashboard.workbook.instrument_sheet import InstrumentSheet
+from portfolio.workbook.instrument_sheet import InstrumentSheet
 
 
 def sheet_with(rows, name="instrumentos"):

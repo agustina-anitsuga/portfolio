@@ -3,8 +3,8 @@ import openpyxl
 import pytest
 
 from doubles import CEDEARS_MARKET, USD_MARKET, make_holding, make_instrument, make_quote
-from portfolio_dashboard.output.general_dashboard_writer import HEADERS, GeneralDashboardWriter
-from portfolio_dashboard.portfolio.market_report import MarketReport
+from portfolio.output.general_dashboard_writer import HEADERS, GeneralDashboardWriter
+from portfolio.portfolio.market_report import MarketReport
 
 
 def write(reports):

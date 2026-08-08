@@ -2,11 +2,11 @@
 import pytest
 
 from doubles import FakePpi, FakeYahoo, make_position, write_workbook
-from portfolio_dashboard.market import Market
-from portfolio_dashboard.marketdata.price_resolver import PriceResolver
-from portfolio_dashboard.portfolio.position import Position
-from portfolio_dashboard.portfolio.report_builder import ReportBuilder
-from portfolio_dashboard.workbook.portfolio_workbook import PortfolioWorkbook
+from portfolio.market import Market
+from portfolio.marketdata.price_resolver import PriceResolver
+from portfolio.portfolio.position import Position
+from portfolio.portfolio.report_builder import ReportBuilder
+from portfolio.workbook.portfolio_workbook import PortfolioWorkbook
 
 
 def builder(workbook_path, fx, ppi=None, yahoo=None):

@@ -4,9 +4,9 @@ import datetime as dt
 import pytest
 
 from doubles import USD_MARKET, make_holding, make_instrument, make_quote, make_transaction
-from portfolio_dashboard.market import Market
-from portfolio_dashboard.portfolio.market_report import MarketReport
-from portfolio_dashboard.portfolio.transaction_ledger import TransactionLedger
+from portfolio.market import Market
+from portfolio.portfolio.market_report import MarketReport
+from portfolio.portfolio.transaction_ledger import TransactionLedger
 
 
 def reports_with(key="AAA", price_ars=2000.0, price_usd=2.0, source="PPI (en vivo)"):

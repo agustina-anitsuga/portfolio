@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import openpyxl
 
-from portfolio_dashboard.output.excel_style import ExcelStyle
+from portfolio.output.excel_style import ExcelStyle
 
 
 def a_sheet():

@@ -3,7 +3,7 @@ import datetime as dt
 
 import pytest
 
-from portfolio_dashboard.workbook.date_parser import DateParser
+from portfolio.workbook.date_parser import DateParser
 
 
 @pytest.mark.parametrize("value, expected", [

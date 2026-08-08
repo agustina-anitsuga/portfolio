@@ -2,8 +2,8 @@
 import datetime as dt
 
 from doubles import USD_MARKET, write_workbook
-from portfolio_dashboard.market import Market
-from portfolio_dashboard.workbook.portfolio_workbook import PortfolioWorkbook
+from portfolio.market import Market
+from portfolio.workbook.portfolio_workbook import PortfolioWorkbook
 
 
 def test_exposes_instruments_and_the_manual_rate(workbook_path):

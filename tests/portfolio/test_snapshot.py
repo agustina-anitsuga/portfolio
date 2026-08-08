@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from doubles import USD_MARKET, make_holding, make_instrument, make_quote
-from portfolio_dashboard.marketdata.fx_rate import FxRate
-from portfolio_dashboard.marketdata.quote import Quote
-from portfolio_dashboard.portfolio.market_report import MarketReport
-from portfolio_dashboard.portfolio.snapshot import PortfolioSnapshot
+from portfolio.marketdata.fx_rate import FxRate
+from portfolio.marketdata.quote import Quote
+from portfolio.portfolio.market_report import MarketReport
+from portfolio.portfolio.snapshot import PortfolioSnapshot
 
 
 def report(*holdings):

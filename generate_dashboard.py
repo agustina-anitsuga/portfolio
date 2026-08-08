@@ -87,7 +87,7 @@ USAGE
 
 CODE
     This file is only the entry point. The implementation lives in the
-    portfolio_dashboard/ package:
+    portfolio/ package:
 
       settings.py                 credentials and request limits (environment)
       market.py                   the instrument types and their sheets
@@ -101,7 +101,7 @@ CODE
 
 import sys
 
-from portfolio_dashboard.cli import main
+from portfolio.cli import main
 
 if __name__ == "__main__":
     sys.exit(main())

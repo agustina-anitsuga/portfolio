@@ -4,8 +4,8 @@ import datetime as dt
 import pytest
 
 from doubles import CEDEARS_MARKET, MERVAL_MARKET, USD_MARKET, make_transaction
-from portfolio_dashboard.market import ARS, USD
-from portfolio_dashboard.workbook.transaction import Transaction
+from portfolio.market import ARS, USD
+from portfolio.workbook.transaction import Transaction
 
 
 def test_reads_a_usd_row_taking_each_amount_from_its_column():

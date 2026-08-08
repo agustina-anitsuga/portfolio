@@ -3,9 +3,9 @@ import io
 
 import pytest
 
-from portfolio_dashboard.marketdata import ppi_session as module
-from portfolio_dashboard.marketdata.ppi_session import NO_CLIENT, PpiSession
-from portfolio_dashboard.settings import Settings
+from portfolio.marketdata import ppi_session as module
+from portfolio.marketdata.ppi_session import NO_CLIENT, PpiSession
+from portfolio.settings import Settings
 
 
 class FakeClient:

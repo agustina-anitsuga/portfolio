@@ -4,7 +4,7 @@ import datetime as dt
 import openpyxl
 
 from doubles import USD_MARKET
-from portfolio_dashboard.workbook.transaction_sheet import TransactionSheet
+from portfolio.workbook.transaction_sheet import TransactionSheet
 
 
 def workbook_with(rows, sheet_name="tx-usd"):

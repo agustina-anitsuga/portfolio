@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import pytest
 
-from portfolio_dashboard.marketdata.trend import Trend
+from portfolio.marketdata.trend import Trend
 
 
 def test_empty_trend_has_no_percentage_and_no_series():

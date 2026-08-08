@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from portfolio_dashboard.workbook.instrument import Instrument
+from portfolio.workbook.instrument import Instrument
 
 FULL_ROW = ("AAA", "Alpha Corp", "CEDEARS", "A-48HS", 20, "Technology", "USD", 1500.0, "Stock")
 

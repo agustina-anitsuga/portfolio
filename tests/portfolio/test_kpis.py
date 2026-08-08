@@ -2,9 +2,9 @@
 import pytest
 
 from doubles import make_holding, make_position, make_quote
-from portfolio_dashboard.market import ARS
-from portfolio_dashboard.marketdata.quote import Quote
-from portfolio_dashboard.portfolio.kpis import Kpis
+from portfolio.market import ARS
+from portfolio.marketdata.quote import Quote
+from portfolio.portfolio.kpis import Kpis
 
 
 def holding(cost_ars=1000.0, price_ars=200.0, units=10.0):
@@ -52,7 +52,7 @@ def test_a_zero_invested_total_leaves_the_percentage_undefined():
 
 
 def test_realized_results_are_totalled_too():
-    from portfolio_dashboard.portfolio.position import Position
+    from portfolio.portfolio.position import Position
     position = Position()
     position.buy(10, {ARS: 1000.0, "usd": 10.0}, "2025", in_scope=True)
     position.sell(5, {ARS: 800.0, "usd": 8.0}, in_scope=True)

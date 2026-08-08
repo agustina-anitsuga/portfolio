@@ -3,10 +3,10 @@ import pytest
 
 from doubles import (CEDEARS_MARKET, USD_MARKET, make_holding, make_instrument,
                      make_position, make_quote)
-from portfolio_dashboard.market import ARS, USD
-from portfolio_dashboard.marketdata.quote import Quote
-from portfolio_dashboard.marketdata.trend import Trend
-from portfolio_dashboard.portfolio.position import Position
+from portfolio.market import ARS, USD
+from portfolio.marketdata.quote import Quote
+from portfolio.marketdata.trend import Trend
+from portfolio.portfolio.position import Position
 
 
 def test_metrics_are_computed_for_both_currencies():

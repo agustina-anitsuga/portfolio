@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import pytest
 
-from portfolio_dashboard.market import ARS, USD
-from portfolio_dashboard.marketdata.fx_rate import FxRate
+from portfolio.market import ARS, USD
+from portfolio.marketdata.fx_rate import FxRate
 
 
 def test_a_rate_with_a_value_is_truthy():

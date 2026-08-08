@@ -6,11 +6,11 @@ import re
 import pytest
 
 from doubles import USD_MARKET, make_holding, make_instrument
-from portfolio_dashboard.market import Market
-from portfolio_dashboard.marketdata.fx_rate import FxRate
-from portfolio_dashboard.output.html_dashboard import ASSETS, HtmlDashboard
-from portfolio_dashboard.portfolio.market_report import MarketReport
-from portfolio_dashboard.portfolio.snapshot import PortfolioSnapshot
+from portfolio.market import Market
+from portfolio.marketdata.fx_rate import FxRate
+from portfolio.output.html_dashboard import ASSETS, HtmlDashboard
+from portfolio.portfolio.market_report import MarketReport
+from portfolio.portfolio.snapshot import PortfolioSnapshot
 
 
 def snapshot():

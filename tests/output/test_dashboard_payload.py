@@ -2,11 +2,11 @@
 import datetime as dt
 
 from doubles import CEDEARS_MARKET, USD_MARKET, make_holding, make_instrument, make_quote
-from portfolio_dashboard.market import Market
-from portfolio_dashboard.marketdata.fx_rate import FxRate
-from portfolio_dashboard.output.dashboard_payload import DashboardPayload
-from portfolio_dashboard.portfolio.market_report import MarketReport
-from portfolio_dashboard.portfolio.snapshot import PortfolioSnapshot
+from portfolio.market import Market
+from portfolio.marketdata.fx_rate import FxRate
+from portfolio.output.dashboard_payload import DashboardPayload
+from portfolio.portfolio.market_report import MarketReport
+from portfolio.portfolio.snapshot import PortfolioSnapshot
 
 NOW = dt.datetime(2026, 8, 8, 14, 30)
 

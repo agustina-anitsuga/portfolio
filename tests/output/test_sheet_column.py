@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import pytest
 
-from portfolio_dashboard.output.sheet_column import MONEY_FORMAT, PERCENT_FORMAT, SheetColumn
+from portfolio.output.sheet_column import MONEY_FORMAT, PERCENT_FORMAT, SheetColumn
 
 
 def test_a_percent_column_is_recognised_by_its_format():
