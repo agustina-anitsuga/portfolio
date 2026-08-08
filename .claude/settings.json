@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Bash(xargs perl -pi -e 's/\\\\bportfolio_dashboard\\\\b/portfolio/g')",
-      "Bash(.venv/bin/python -m flake8 --max-line-length=110 portfolio tests generate_dashboard.py)"
+      "Bash(.venv/bin/python -m flake8 --max-line-length=110 portfolio tests generate_dashboard.py)",
+      "Bash(grep -E \"^\\\\.\\(vscode|idea\\)$\")",
+      "Bash(python3 -m pytest --version)",
+      "Bash(.venv/bin/python -m pytest --collect-only -q)",
+      "Bash(.venv/bin/python -m pytest tests --collect-only -q)",
+      "Bash(.venv/bin/python -m pytest tests/marketdata --collect-only -q)",
+      "Bash(.venv/bin/python -m pytest tests/portfolio/test_position.py --collect-only -q)"
     ]
   }
 }
