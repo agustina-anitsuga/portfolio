@@ -107,3 +107,15 @@ python3 generate_dashboard.py portfolio.xlsx --out-html portfolio.html
 El HTML no se arma con strings dentro del Python: `output/assets/` tiene la
 plantilla, el CSS y los modulos JS por separado, y el renderer los concatena
 con los datos embebidos.
+
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+python3 -m pytest
+```
+
+Hay un archivo de test por clase, en `tests/` con la misma estructura que el
+paquete. Los tests no salen a la red nunca: PPI y Yahoo se reemplazan por los
+dobles de `tests/doubles.py`, asi que un test que falla es un bug de verdad y
+no un mercado cerrado.

@@ -28,6 +28,12 @@ function buildPage(marketKey) {
     if (anyApprox) {
       html += `<div class="approx-note">Uno o mas portfolios tienen posiciones con montos aproximados en la moneda no nativa (se convirtieron al tipo de cambio de HOY para esa operacion puntual, no historico). Mira el detalle en la pestana de cada tipo de instrumento.</div>`;
     }
+    // same two charts as the per-instrument-type tabs, except here each bar and
+    // each slice is a whole portfolio instead of a single position.
+    html += `<div class="charts">
+      <div class="chart-card"><canvas id="bar-${marketKey}"></canvas></div>
+      <div class="chart-card"><canvas id="pie-${marketKey}"></canvas></div>
+    </div>`;
     html += `<div class="toolbar">
       ${yearSelectHtml(marketKey, allBuyYears())}
       <select data-role="currency" data-market="${marketKey}">

@@ -116,8 +116,8 @@ function applyFilters(marketKey, cols) {
   renderRows(marketKey, rows, cols);
   // the charts and the KPI pills (absent in Transacciones) are recomputed with
   // the same filtered subset shown in the table.
-  if (marketKey !== 'general' && marketKey !== 'tx') renderCharts(marketKey, rows);
   if (marketKey !== 'tx') {
+    renderCharts(marketKey, rows);
     renderKpis(marketKey, rows);
     renderUnpricedNote(marketKey, rows);
     renderScopeNote(marketKey, rows);

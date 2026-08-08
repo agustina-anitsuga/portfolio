@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/bin/python -)",
+      "Bash(.venv/bin/python -m flake8 --max-line-length=110 portfolio_dashboard tests generate_dashboard.py)"
+    ]
+  }
+}

@@ -10,9 +10,11 @@ class ConsoleSummary:
     """Reports what was generated, what ended up without a price and why, so
     the spreadsheet or the credentials can be fixed without guessing."""
 
-    def __init__(self, snapshot, out=sys.stdout):
+    def __init__(self, snapshot, out=None):
         self._snapshot = snapshot
-        self._out = out
+        # resolved on use, not at import time: a default of sys.stdout would
+        # bind whatever stream existed when the module was first imported.
+        self._out = out or sys.stdout
 
     def print_report(self, generated_paths):
         for path in generated_paths:

@@ -56,14 +56,18 @@ class GeneralDashboardWriter:
 
     @staticmethod
     def _decorate(sheet, header_row, last_row):
+        first_row = header_row + 1
         for column, number_format in NUMBER_FORMATS.items():
-            for row in range(header_row + 1, last_row + 1):
+            for row in range(first_row, last_row + 1):
                 sheet.cell(row=row, column=column).number_format = number_format
-        sheet.auto_filter.ref = f"A{header_row}:J{last_row}"
-        sheet.freeze_panes = f"A{header_row + 1}"
-        for column in SEMAPHORE_COLUMNS:
-            letter = get_column_letter(column)
-            ExcelStyle.pl_semaphore(sheet, f"{letter}{header_row + 1}:{letter}{last_row}")
+        sheet.auto_filter.ref = f"A{header_row}:J{max(last_row, header_row)}"
+        sheet.freeze_panes = f"A{first_row}"
+        # with no positions at all there is no data range to paint, and asking
+        # for one would build an inverted range that openpyxl rejects.
+        if last_row >= first_row:
+            for column in SEMAPHORE_COLUMNS:
+                letter = get_column_letter(column)
+                ExcelStyle.pl_semaphore(sheet, f"{letter}{first_row}:{letter}{last_row}")
         for index, width in enumerate(WIDTHS, start=1):
             sheet.column_dimensions[get_column_letter(index)].width = width
 
