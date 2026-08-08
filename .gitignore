@@ -8,8 +8,12 @@ __pycache__/
 *.egg-info/
 
 # Credenciales PPI (nunca commitear con valores reales)
-setkeys.txt
+keys.txt
 .env
+
+# Portfolio (no comitear portfolio real)
+portfolio.html
+portfolio.xlsx
 
 # macOS
 .DS_Store

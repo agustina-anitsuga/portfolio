@@ -75,17 +75,35 @@ Sin credenciales el script igual corre: usa los fallbacks de precio.
 ## Uso
 
 ```bash
-python3 generar_dashboard_ppi.py portfolio.xlsx --out-html portfolio.html
+python3 generate_dashboard.py portfolio.xlsx --out-html portfolio.html
 ```
 
 ## Archivos
 
 | Archivo | Descripcion |
 | --- | --- |
-| `generar_dashboard_ppi.py` | Script generador del dashboard |
+| `generate_dashboard.py` | Punto de entrada del generador |
+| `portfolio_dashboard/` | Implementacion (ver detalle abajo) |
 | `portfolio.xlsx` | Planilla de transacciones (entrada) |
 | `portfolio.html` | Dashboard generado (salida) |
 
 > `portfolio.xlsx` y `portfolio.html` son datos de ejemplo, no posiciones
 > reales: sirven de referencia del formato esperado. Reemplaza el `.xlsx` por
 > tu propia planilla para generar tu dashboard.
+
+## Estructura del codigo
+
+| Modulo | Responsabilidad |
+| --- | --- |
+| `settings.py` | Credenciales y limites de pedidos, leidos del entorno |
+| `market.py` | Los tipos de instrumento: hoja, moneda nativa y columnas |
+| `app.py` | Arma las dependencias y devuelve el portfolio calculado |
+| `cli.py`, `console_summary.py` | Linea de comandos y resumen final |
+| `marketdata/` | Precios de PPI y Yahoo, tipo de cambio y orden de fallback |
+| `workbook/` | Lectura de la planilla (instrumentos, config, tx-*) |
+| `portfolio/` | Posiciones por costo promedio, metricas y reportes |
+| `output/` | Dashboard HTML (`output/assets/`) y planilla Excel |
+
+El HTML no se arma con strings dentro del Python: `output/assets/` tiene la
+plantilla, el CSS y los modulos JS por separado, y el renderer los concatena
+con los datos embebidos.
