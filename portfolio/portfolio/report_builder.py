@@ -26,8 +26,9 @@ class ReportBuilder:
 
     def _holding(self, market, ticker, position):
         instrument = self._workbook.instrument(ticker)
+        quote = self._prices.quote(market, instrument)
         return Holding(
-            market, instrument, position,
-            quote=self._prices.quote(market, instrument),
+            market, instrument, position, quote,
             trend=self._prices.trend(market, instrument),
+            analytics=self._prices.analytics(market, instrument, quote, position.reported_units),
         )

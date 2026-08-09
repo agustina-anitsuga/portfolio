@@ -8,7 +8,32 @@
       "Bash(.venv/bin/python -m pytest --collect-only -q)",
       "Bash(.venv/bin/python -m pytest tests --collect-only -q)",
       "Bash(.venv/bin/python -m pytest tests/marketdata --collect-only -q)",
-      "Bash(.venv/bin/python -m pytest tests/portfolio/test_position.py --collect-only -q)"
+      "Bash(.venv/bin/python -m pytest tests/portfolio/test_position.py --collect-only -q)",
+      "Bash(.venv/bin/python -)",
+      "Bash(cat .venv/lib/*/site-packages/ppi_client/models/estimate_bonds.py *)",
+      "Bash(.venv/bin/python -m flake8 --max-line-length=110 probe_ppi_bonds.py)",
+      "Bash(env -u PPI_PUBLIC_KEY -u PPI_PRIVATE_KEY .venv/bin/python probe_ppi_bonds.py)",
+      "Bash(echo \"\\(exit $?\\)\")",
+      "Bash(.venv/bin/python probe_ppi_bonds.py --help)",
+      "Bash(env -u PPI_PUBLIC_KEY .venv/bin/python probe_ppi_bonds.py)",
+      "Bash(.venv/bin/python -m flake8 --max-line-length=110 portfolio tests generate_dashboard.py probe_ppi_bonds.py)",
+      "Bash(.venv/bin/python -m pytest)",
+      "Bash(.venv/bin/python -m flake8 --max-line-length=110 portfolio tests)",
+      "Read(//private/tmp/pf_base/**)",
+      "Bash(node -)",
+      "Bash(find ~ -maxdepth 4 -iname \"*watchlist*\" -not -path \"*/.venv/*\" -not -path \"*/Library/*\" 2>/dev/null | head -20)",
+      "Read(//Users/agustina/**)",
+      "Bash(node -e ' *)",
+      "Bash(node check_watch.js)",
+      "Bash(.venv/bin/python generate_dashboard.py --help)",
+      "Bash(PYTHONPATH=/tmp/pf_stubs .venv/bin/python generate_dashboard.py /tmp/pf_base/with_watch.xlsx --out-html /tmp/pf_base/nowatch.html --no-watchlist)",
+      "Bash(.venv/bin/python -c ' *)",
+      "Bash(node check_ui.js)"
+    ],
+    "additionalDirectories": [
+      "/Users/agustina/IdeaProjects/portfolio/.venv/lib/*/site-packages/ppi_client/api",
+      "/tmp/pf_base",
+      "/private/tmp/pf_base"
     ]
   }
 }

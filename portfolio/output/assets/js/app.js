@@ -1,13 +1,14 @@
 function initPage(marketKey) {
   const isGeneral = marketKey === 'general';
   const isTx = marketKey === 'tx';
+  const isWatch = marketKey === 'watch';
   const cols = getCols(marketKey);
   tableState[marketKey] = {
     currency: DEFAULT_CURRENCY[marketKey] || 'ars',
     sort: {
-      key: isGeneral ? 'pl_abs' : (isTx ? 'date' : 'value'),
+      key: isGeneral ? 'pl_abs' : (isTx ? 'date' : (isWatch ? 'score' : 'value')),
       dir: -1,
-      dual: !isGeneral && !isTx,
+      dual: !isGeneral && !isTx && !isWatch,
     },
   };
 
@@ -20,6 +21,9 @@ function initPage(marketKey) {
       .addEventListener('input', () => applyFilters('tx', cols));
     document.querySelector(`[data-role="type"][data-market="tx"]`)
       .addEventListener('change', () => applyFilters('tx', cols));
+  } else if (isWatch) {
+    document.querySelector(`[data-role="search"][data-market="watch"]`)
+      .addEventListener('input', () => applyFilters('watch', cols));
   } else if (!isGeneral) {
     document.querySelector(`[data-role="search"][data-market="${marketKey}"]`)
       .addEventListener('input', () => applyFilters(marketKey, cols));

@@ -2,6 +2,7 @@
 """One line of the report: a position with its instrument and its price."""
 
 from ..market import CURRENCIES
+from ..marketdata.bond_analytics import BondAnalytics
 from .currency_metrics import CurrencyMetrics
 
 
@@ -10,12 +11,13 @@ class Holding:
     market knows (today's price and trend), and exposes it as the row the HTML
     and the Excel file consume."""
 
-    def __init__(self, market, instrument, position, quote, trend):
+    def __init__(self, market, instrument, position, quote, trend, analytics=None):
         self.market = market
         self.instrument = instrument
         self.position = position
         self.quote = quote
         self.trend = trend
+        self.analytics = analytics or BondAnalytics.empty()
         self.units = position.reported_units
         self.metrics = {c: self._metrics(c) for c in CURRENCIES}
         self._portfolio_share = dict.fromkeys(CURRENCIES)
@@ -46,6 +48,7 @@ class Holding:
             "native_currency": self.market.native_currency,
             "price_debug_note": self.quote.debug_note,
         }
+        row.update(self.analytics.as_dict())
         for currency in CURRENCIES:
             row.update(self.metrics[currency].as_dict(currency))
         for currency in CURRENCIES:

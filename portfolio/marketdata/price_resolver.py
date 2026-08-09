@@ -2,6 +2,7 @@
 """Fallback order for each instrument's price."""
 
 from ..market import USD
+from .bond_analytics import BondAnalytics
 from .quote import Quote
 
 PPI_SOURCE = "PPI (en vivo)"
@@ -21,18 +22,38 @@ class PriceResolver:
     on top of the full one, and today's price is the same in all of them.
     """
 
-    def __init__(self, ppi_market_data, yahoo_market_data, fx):
+    def __init__(self, ppi_market_data, yahoo_market_data, fx, bond_calculator=None):
         self._ppi = ppi_market_data
         self._yahoo = yahoo_market_data
         self._fx = fx
+        self._bonds = bond_calculator
         self._quotes = {}
         self._trends = {}
+        self._analytics = {}
 
     def quote(self, market, instrument):
         return self._cached(self._quotes, market, instrument, self._resolve_quote)
 
     def trend(self, market, instrument):
         return self._cached(self._trends, market, instrument, self._resolve_trend)
+
+    def analytics(self, market, instrument, quote, units):
+        """Bond figures, empty for every other instrument type.
+
+        Cached per (market, ticker) even though `units` is part of the request:
+        yield, coupon, parity and duration are rates, so they do not change
+        with the size of the position -- and the per-year reports would
+        otherwise ask again with a different holding.
+        """
+        if not market.is_bonds or self._bonds is None:
+            return BondAnalytics.empty()
+        # only PPI's own price is on the "per 100 nominal" convention the
+        # calculator expects; a manual price could mean anything.
+        if quote.source != PPI_SOURCE:
+            return BondAnalytics.empty()
+        return self._cached(self._analytics, market, instrument,
+                            lambda m, i: self._bonds.analytics(
+                                i.key, quote.price(m.native_currency), units, self._fx))
 
     def _cached(self, cache, market, instrument, resolve):
         cache_key = (market.key, instrument.key)

@@ -13,6 +13,7 @@ class PortfolioSnapshot:
     reports_by_year: dict = field(default_factory=dict)
     fx: object = None
     transactions: list = field(default_factory=list)
+    watchlist: list = field(default_factory=list)
 
     @property
     def years(self):

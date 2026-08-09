@@ -37,6 +37,7 @@ function renderRows(marketKey, rows, cols) {
     if (c.key === 'label') return `<td><strong>${v}</strong></td>`;
     if (c.key === 'market') return `<td>${TAB_LABELS[v] || v}</td>`;
     if (c.key === 'op') return `<td class="${v==='BUY'?'pos':(v==='SELL'?'neg':'')}">${v}</td>`;
+    if (c.signal) return `<td class="signal-cell">${signalBadge(v)}</td>`;
     if (c.spark) return `<td class="${plClass(v)}" title="${v===null||v===undefined?'sin datos':fmtPct(v)+' en 30 dias'}">${sparkline(r.trend_series, v)}</td>`;
     if (v === null || v === undefined) return `<td>—</td>`;
     if (c.pct) return `<td class="${c.pl?plClass(v):''}">${fmtPct(v)}</td>`;
@@ -47,7 +48,9 @@ function renderRows(marketKey, rows, cols) {
   }).join('');
   const countEl = document.querySelector(`[data-role="count"][data-market="${marketKey}"]`);
   if (countEl) {
-    const total = marketKey === 'tx' ? DATA.transactions.length : DATA.markets[marketKey].rows.length;
+    const total = marketKey === 'tx' ? DATA.transactions.length
+                : marketKey === 'watch' ? DATA.watchlist.length
+                : DATA.markets[marketKey].rows.length;
     countEl.textContent = `${rows.length} de ${total}`;
   }
 }
@@ -60,6 +63,12 @@ function filterRows(marketKey) {
 
   if (marketKey === 'general') {
     return buildGeneralRows(currency);
+  }
+  if (marketKey === 'watch') {
+    const searchEl = document.querySelector(`[data-role="search"][data-market="watch"]`);
+    const search = (searchEl.value || '').toLowerCase();
+    return DATA.watchlist.filter(r => !search ||
+      `${r.ticker} ${r.name || ''}`.toLowerCase().includes(search));
   }
   if (marketKey === 'tx') {
     const searchEl = document.querySelector(`[data-role="search"][data-market="tx"]`);
@@ -116,7 +125,7 @@ function applyFilters(marketKey, cols) {
   renderRows(marketKey, rows, cols);
   // the charts and the KPI pills (absent in Transacciones) are recomputed with
   // the same filtered subset shown in the table.
-  if (marketKey !== 'tx') {
+  if (marketKey !== 'tx' && marketKey !== 'watch') {
     renderCharts(marketKey, rows);
     renderKpis(marketKey, rows);
     renderUnpricedNote(marketKey, rows);

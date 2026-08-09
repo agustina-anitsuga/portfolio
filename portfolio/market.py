@@ -7,6 +7,8 @@ ARS = "ars"
 USD = "usd"
 CURRENCIES = (ARS, USD)
 
+BONDS = "bonds"
+
 
 def other_currency(currency):
     return USD if currency == ARS else ARS
@@ -33,6 +35,11 @@ class Market:
     @property
     def other_currency(self):
         return other_currency(self.native_currency)
+
+    @property
+    def is_bonds(self):
+        """Bonds get extra columns: yield, coupon, maturity, duration."""
+        return self.key == BONDS
 
     def amount_column(self, currency):
         return self.ars_column if currency == ARS else self.usd_column

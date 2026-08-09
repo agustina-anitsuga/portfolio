@@ -19,6 +19,7 @@ class DashboardPayload:
             "markets": {m.key: self._market(m) for m in Market.all()},
             "general": self._general(),
             "transactions": self._snapshot.transactions,
+            "watchlist": self._snapshot.watchlist,
             "years": self._snapshot.years,
             "fx_rate": self._snapshot.fx.value,
             "fx_source": self._snapshot.fx.source,

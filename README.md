@@ -102,11 +102,45 @@ python3 generate_dashboard.py portfolio.xlsx --out-html portfolio.html
 | `marketdata/` | Precios de PPI y Yahoo, tipo de cambio y orden de fallback |
 | `workbook/` | Lectura de la planilla (instrumentos, config, tx-*) |
 | `portfolio/` | Posiciones por costo promedio, metricas y reportes |
+| `watchlist/` | Instrumentos vigilados, señales y puntaje |
 | `output/` | Dashboard HTML (`output/assets/`) y planilla Excel |
 
 El HTML no se arma con strings dentro del Python: `output/assets/` tiene la
 plantilla, el CSS y los modulos JS por separado, y el renderer los concatena
 con los datos embebidos.
+
+## Watchlist
+
+Instrumentos que seguis sin tenerlos en cartera. Se cargan en una hoja
+`watchlist` del mismo `.xlsx`, con el ticker en la primera columna (el resto de
+las columnas quedan libres para tus notas):
+
+| Ticker | Notas |
+| --- | --- |
+| AAPL | mirar despues del balance |
+| GOOGL | |
+
+La solapa se genera con datos de Yahoo Finance y reproduce los dos metodos de
+la planilla original:
+
+- **Signal #1** ubica el precio dentro del rango de 52 semanas. El target de
+  compra esta al 50% del rango y el de venta al 85%: por debajo del primero
+  dice `Buy`, por encima del segundo `Sell`, en el medio `Hold`.
+- **Signal #2** puntua cinco parametros (PE < 10, current ratio > 1, RSI < 50,
+  deuda/equity < 1, price/book < 3) y traduce el puntaje: 5 `Strong buy`,
+  4 `Buy`, 3 y 2 `Hold`, 1 `Sell`, 0 `Strong Sell`. Si falta algun parametro
+  no hay puntaje, que es lo que pasa con los ETF.
+
+Los tickers son los de Yahoo, que no siempre coinciden con los de Google
+Finance: `BRK-B` y no `BRKB`, `META` y no `FB`, `BTC-USD` y no `BTC`.
+
+La watchlist se calcula por defecto. Como es la parte mas lenta de la corrida
+(dos consultas por instrumento vigilado) y no cambia nada del portfolio, se
+puede saltear:
+
+```bash
+python3 generate_dashboard.py portfolio.xlsx --out-html portfolio.html --no-watchlist
+```
 
 ## Tests
 

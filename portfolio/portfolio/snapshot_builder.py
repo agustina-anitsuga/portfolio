@@ -16,10 +16,11 @@ class SnapshotBuilder:
     from what was traded in 2025.
     """
 
-    def __init__(self, workbook, prices, fx):
+    def __init__(self, workbook, prices, fx, watchlist=None):
         self._workbook = workbook
         self._prices = prices
         self._fx = fx
+        self._watchlist = watchlist
         self._reports = ReportBuilder(workbook, prices)
 
     def build(self):
@@ -30,7 +31,15 @@ class SnapshotBuilder:
             reports_by_year={y: self._reports.build(self._positions(y)) for y in self._buy_years(positions)},
             fx=self._fx,
             transactions=TransactionLedger(self._workbook.all_transactions(), reports).rows(),
+            watchlist=self._watched_rows(),
         )
+
+    def _watched_rows(self):
+        """La watchlist no tiene posiciones: son instrumentos que se siguen sin
+        tenerlos, asi que no pasa por el calculo de cartera."""
+        if self._watchlist is None or not self._workbook.watchlist:
+            return []
+        return self._watchlist.rows(self._workbook.watchlist)
 
     def _positions(self, year=None):
         return PositionTracker(self._fx, year).track_all(self._workbook)

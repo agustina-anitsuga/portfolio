@@ -60,7 +60,11 @@ class FakeYahoo:
 
 
 class FakeSession:
-    """Stands in for PpiSession: runs the request once, with no pacing."""
+    """Stands in for PpiSession: runs the request once, with no pacing.
+
+    It keeps the real contract of turning an exception into a reason, because
+    callers rely on that to never let a market failure reach the user.
+    """
 
     def __init__(self, client=None, available=True):
         self.client = client
@@ -71,7 +75,10 @@ class FakeSession:
         self.calls += 1
         if not self.available:
             return None, "sin cliente"
-        return request()
+        try:
+            return request()
+        except Exception as e:
+            return None, f"error consultando PPI: {type(e).__name__}: {e}"
 
 
 # ---------------------------------------------------------------------------

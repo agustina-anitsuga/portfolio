@@ -18,7 +18,8 @@ def report(market=USD_MARKET, *holdings):
 def snapshot(**kwargs):
     reports = {key: report(Market.get(key)) for key in Market.keys()}
     reports["usd"] = report(USD_MARKET, make_holding(instrument=make_instrument("AAA")))
-    defaults = dict(reports=reports, fx=FxRate(1450.0, "PPI"), transactions=[], reports_by_year={})
+    defaults = dict(reports=reports, fx=FxRate(1450.0, "PPI"), transactions=[],
+                    watchlist=[], reports_by_year={})
     defaults.update(kwargs)
     return PortfolioSnapshot(**defaults)
 
@@ -28,7 +29,7 @@ def payload(**kwargs):
 
 
 def test_the_payload_has_the_sections_the_page_reads():
-    assert set(payload()) == {"markets", "general", "transactions", "years",
+    assert set(payload()) == {"markets", "general", "transactions", "watchlist", "years",
                               "fx_rate", "fx_source", "generated_at"}
 
 
@@ -87,6 +88,10 @@ def test_a_missing_exchange_rate_is_reported_as_nothing():
     result = payload(fx=FxRate.unavailable("mercado cerrado"))
     assert result["fx_rate"] is None
     assert result["fx_source"] == "mercado cerrado"
+
+
+def test_the_watchlist_is_passed_through():
+    assert payload(watchlist=[{"ticker": "AAPL"}])["watchlist"] == [{"ticker": "AAPL"}]
 
 
 def test_the_transactions_are_passed_through():

@@ -62,3 +62,24 @@ def test_the_dependencies_default_to_the_real_ones(monkeypatch):
     app must not touch the network."""
     application = PortfolioApp()
     assert application is not None
+
+
+def test_the_watchlist_is_built_by_default(spreadsheet, tmp_path):
+    import openpyxl
+    from portfolio.watchlist.fundamentals import Fundamentals
+    from portfolio.watchlist.watchlist_builder import WatchlistBuilder
+
+    workbook = openpyxl.load_workbook(spreadsheet)
+    sheet = workbook.create_sheet("watchlist")
+    sheet.append(["Ticker"])
+    sheet.append(["AAPL"])
+    workbook.save(spreadsheet)
+
+    class Source:
+        def of(self, ticker):
+            return Fundamentals(name="Apple Inc", price=313.33)
+
+    application = PortfolioApp(ppi=FakePpi(), yahoo=FakeYahoo(), bonds=None,
+                               watchlist=WatchlistBuilder(Source()))
+    assert [r["ticker"] for r in application.snapshot(spreadsheet).watchlist] == ["AAPL"]
+    assert application.snapshot(spreadsheet, with_watchlist=False).watchlist == []

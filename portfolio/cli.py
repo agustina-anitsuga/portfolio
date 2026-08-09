@@ -17,7 +17,7 @@ class DashboardCli:
 
     def run(self, argv=None):
         args = self._parse_args(argv)
-        snapshot = self._app.snapshot(args.xlsx_path)
+        snapshot = self._app.snapshot(args.xlsx_path, with_watchlist=not args.no_watchlist)
 
         HtmlDashboard(snapshot).write(args.out_html)
         generated = [args.out_html]
@@ -35,6 +35,10 @@ class DashboardCli:
         parser.add_argument("--out-html", default="Portfolio Dashboard.html")
         parser.add_argument("--out-xlsx", default=None,
                             help="Si se pasa, ademas genera un xlsx con la misma info (opcional).")
+        parser.add_argument("--no-watchlist", action="store_true",
+                            help="No calcula la watchlist. Es la parte mas lenta de la corrida "
+                                 "(dos consultas por instrumento vigilado) y no afecta al "
+                                 "portfolio: la solapa queda vacia.")
         return parser.parse_args(argv)
 
 

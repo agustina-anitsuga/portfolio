@@ -14,8 +14,9 @@ function chartSeries(marketKey, rows, currency) {
 }
 
 function renderCharts(marketKey, filteredRows) {
-  // Transacciones lists individual trades, so there is nothing to aggregate.
-  if (marketKey === 'tx') return;
+  // Transacciones lists individual trades and Watchlist holds no position, so
+  // in both cases there is nothing to aggregate.
+  if (marketKey === 'tx' || marketKey === 'watch') return;
 
   const currency = tableState[marketKey].currency;
   const cur = currency.toUpperCase();

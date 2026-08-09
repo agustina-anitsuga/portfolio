@@ -1,5 +1,5 @@
-const MARKET_KEYS = ['general', 'usd', 'cedears', 'merval', 'rsu', 'bonds', 'tx'];
-const TAB_LABELS = { general: 'General', usd: 'US Stocks', cedears: 'Cedears', merval: 'Acciones Merval', rsu: 'RSU', bonds: 'Bonos', tx: 'Transacciones' };
+const MARKET_KEYS = ['general', 'usd', 'cedears', 'merval', 'rsu', 'bonds', 'tx', 'watch'];
+const TAB_LABELS = { general: 'General', usd: 'US Stocks', cedears: 'Cedears', merval: 'Acciones Merval', rsu: 'RSU', bonds: 'Bonos', tx: 'Transacciones', watch: 'Watchlist' };
 
 // "real" portfolios (not general/tx) -- used to build the combined totals of
 // the General tab without repeating the list everywhere.
@@ -37,6 +37,18 @@ const COLUMNS_DUAL = [
   {key:'realized_pct', label:'P&L Realiz. %', num:true, pl:true, pct:true, dual:true},
 ];
 
+// Only bonds have these: they come from PPI's bond calculator. TIR, parity and
+// duration are computed against today's exchange rate, because a bond quoted
+// in pesos can pay its coupons in dollars.
+const BOND_COLUMNS = [
+  {key:'bond_tir', label:'TIR', num:true, pct:true},
+  {key:'bond_coupon', label:'Cupon', num:true, pct:true},
+  {key:'bond_next_payment', label:'Prox. Pago'},
+  {key:'bond_maturity', label:'Vencimiento'},
+  {key:'bond_duration', label:'Duration', num:true},
+  {key:'bond_parity', label:'Paridad', num:true, pct:true},
+];
+
 // The general tab shows ONE row per portfolio (USD/Cedears/Merval), not one
 // row per product -- they are the totals of each table above.
 const GENERAL_COLUMNS = [
@@ -70,9 +82,43 @@ const TX_COLUMNS = [
   {key:'pl_pct_usd', label:'P&L % (USD)', num:true, pct:true, pl:true},
 ];
 
+// Solapa "Watchlist": instrumentos que se siguen sin tenerlos en cartera, con
+// las dos señales de la planilla original. Metodo #1 ubica el precio dentro
+// del rango de 52 semanas; metodo #2 puntua cinco parametros fundamentales.
+// Los dos metodos se distinguen por color en una fila de encabezado que va
+// arriba de los nombres de columna, igual que en la planilla original.
+const COLUMN_GROUPS = {
+  m1: 'Metodo #1: precio dentro del rango de 52 semanas',
+  m2: 'Metodo #2: analisis de parametros',
+};
+
+const WATCHLIST_COLUMNS = [
+  {key:'ticker', label:'Ticker'},
+  {key:'name', label:'Nombre'},
+  {key:'price', label:'Precio', num:true},
+  {key:'change_pct', label:'% Dia', num:true, pct:true, pl:true},
+  {key:'market_cap', label:'Market Cap (B)', num:true},
+  {key:'eps', label:'EPS', num:true},
+  {key:'signal_price', label:'Signal', signal:true, group:'m1'},
+  {key:'low52', label:'Min. 52s', num:true, group:'m1'},
+  {key:'high52', label:'Max. 52s', num:true, group:'m1'},
+  {key:'target_buy', label:'Target Compra', num:true, group:'m1'},
+  {key:'target_sell', label:'Target Venta', num:true, group:'m1'},
+  {key:'signal_score', label:'Signal', signal:true, group:'m2'},
+  {key:'earnings', label:'Earnings', group:'m2'},
+  {key:'pe', label:'PE', num:true, group:'m2'},
+  {key:'current_ratio', label:'Current Ratio', num:true, group:'m2'},
+  {key:'rsi', label:'RSI (14)', num:true, group:'m2'},
+  {key:'debt_to_equity', label:'Debt/Equity', num:true, group:'m2'},
+  {key:'price_to_book', label:'Price/Book', num:true, group:'m2'},
+  {key:'score', label:'Score', num:true, group:'m2'},
+];
+
 function getCols(marketKey) {
   if (marketKey === 'general') return GENERAL_COLUMNS;
   if (marketKey === 'tx') return TX_COLUMNS;
+  if (marketKey === 'watch') return WATCHLIST_COLUMNS;
+  if (marketKey === 'bonds') return [...COLUMNS_BASE, ...BOND_COLUMNS, ...COLUMNS_DUAL];
   return [...COLUMNS_BASE, ...COLUMNS_DUAL];
 }
 

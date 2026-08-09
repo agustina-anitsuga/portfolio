@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 import pytest
 
-from doubles import (CEDEARS_MARKET, RSU_MARKET, USD_MARKET, FakePpi, FakeYahoo,
-                     make_instrument)
+from doubles import (BONDS_MARKET, CEDEARS_MARKET, RSU_MARKET, USD_MARKET, FakePpi,
+                     FakeYahoo, make_instrument)
 from portfolio.marketdata.price_resolver import (MANUAL_SOURCE, PPI_SOURCE, YAHOO_SOURCE,
                                                  PriceResolver)
+from portfolio.marketdata.bond_analytics import BondAnalytics
 from portfolio.marketdata.trend import Trend
 
 
@@ -112,3 +113,78 @@ def test_trends_are_cached_too():
     assert prices.trend(USD_MARKET, instrument).pct == pytest.approx(5.0)
     prices.trend(USD_MARKET, instrument)
     assert len(ppi.trend_calls) == 1
+
+
+# --- bond analytics --------------------------------------------------------
+
+class FakeBonds:
+    def __init__(self, analytics=None):
+        self.calls = []
+        self._analytics = analytics or BondAnalytics(tir=7.75, coupon=6.0)
+
+    def analytics(self, ticker, unit_price, units, fx):
+        self.calls.append((ticker, unit_price, units))
+        return self._analytics
+
+
+def bond_resolver(bonds=None, ppi=None):
+    from portfolio.marketdata.fx_rate import FxRate
+    return PriceResolver(ppi or FakePpi(prices={"AO28": (1474.5, None)}), FakeYahoo(),
+                         FxRate(1500.0, "test"), bonds or FakeBonds())
+
+
+def test_bond_analytics_are_only_asked_for_the_bonds_tab():
+    bonds = FakeBonds()
+    prices = bond_resolver(bonds)
+    instrument = make_instrument("AAA")
+    quote = prices.quote(USD_MARKET, instrument)
+    assert prices.analytics(USD_MARKET, instrument, quote, 10).tir is None
+    assert bonds.calls == []
+
+
+def test_bonds_get_their_analytics():
+    prices = bond_resolver()
+    instrument = make_instrument("AO28")
+    quote = prices.quote(BONDS_MARKET, instrument)
+    assert prices.analytics(BONDS_MARKET, instrument, quote, 1032).tir == pytest.approx(7.75)
+
+
+def test_the_native_price_and_the_holding_size_are_passed_along():
+    bonds = FakeBonds()
+    prices = bond_resolver(bonds)
+    instrument = make_instrument("AO28")
+    quote = prices.quote(BONDS_MARKET, instrument)
+    prices.analytics(BONDS_MARKET, instrument, quote, 1032)
+    assert bonds.calls == [("AO28", 1474.5, 1032)]
+
+
+def test_a_price_that_did_not_come_from_ppi_is_not_used():
+    """Only PPI quotes bonds per 100 nominal; a manual price could mean
+    anything, and feeding it to the calculator would give a wrong yield."""
+    bonds = FakeBonds()
+    prices = bond_resolver(bonds, ppi=FakePpi())
+    instrument = make_instrument("AO28", manual_price=1474.5)
+    quote = prices.quote(BONDS_MARKET, instrument)
+    assert quote.source == MANUAL_SOURCE
+    assert prices.analytics(BONDS_MARKET, instrument, quote, 1032).tir is None
+    assert bonds.calls == []
+
+
+def test_analytics_are_cached_across_the_yearly_reports():
+    """They are rates, so they do not change with the size of the holding."""
+    bonds = FakeBonds()
+    prices = bond_resolver(bonds)
+    instrument = make_instrument("AO28")
+    quote = prices.quote(BONDS_MARKET, instrument)
+    prices.analytics(BONDS_MARKET, instrument, quote, 1032)
+    prices.analytics(BONDS_MARKET, instrument, quote, 500)
+    assert len(bonds.calls) == 1
+
+
+def test_without_a_calculator_the_bond_columns_stay_empty():
+    from portfolio.marketdata.fx_rate import FxRate
+    prices = PriceResolver(FakePpi(prices={"AO28": (1474.5, None)}), FakeYahoo(),
+                           FxRate(1500.0, "test"))
+    instrument = make_instrument("AO28")
+    quote = prices.quote(BONDS_MARKET, instrument)
+    assert prices.analytics(BONDS_MARKET, instrument, quote, 1032).tir is None

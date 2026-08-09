@@ -9,7 +9,14 @@ function buildPage(marketKey) {
 
   let html = '';
 
-  if (isTx) {
+  if (marketKey === 'watch') {
+    // no hay posicion ni moneda que elegir: son instrumentos que se siguen,
+    // asi que alcanza con buscar por ticker o nombre.
+    html += `<div class="toolbar">
+      <input type="text" placeholder="Buscar ticker o nombre..." data-role="search" data-market="${marketKey}">
+      <span class="count" data-role="count" data-market="${marketKey}"></span>
+    </div>`;
+  } else if (isTx) {
     const typeOptions = PORTFOLIO_KEYS;
     html += `<div class="toolbar">
       <input type="text" placeholder="Buscar ticker..." data-role="search" data-market="${marketKey}">
@@ -77,7 +84,7 @@ function buildPage(marketKey) {
   }
 
   html += `<div class="table-wrap" id="wrap-${marketKey}"><table id="table-${marketKey}">
-    <thead><tr data-role="thead" data-market="${marketKey}"></tr></thead>
+    <thead data-role="thead" data-market="${marketKey}"></thead>
     <tbody></tbody>
   </table></div>
   <input type="range" class="hscroll" id="hscroll-${marketKey}" min="0" max="0" value="0" step="1">`;
@@ -86,30 +93,48 @@ function buildPage(marketKey) {
   return page;
 }
 
+// Fila de encabezado que agrupa columnas contiguas del mismo metodo. Las que
+// no pertenecen a ninguno quedan bajo una celda vacia, para que las columnas
+// de abajo sigan alineadas.
+function groupHeaderHtml(cols) {
+  if (!cols.some(c => c.group)) return '';
+  const spans = [];
+  for (const col of cols) {
+    const last = spans[spans.length - 1];
+    if (last && last.group === col.group) last.span += 1;
+    else spans.push({ group: col.group, span: 1 });
+  }
+  return `<tr class="groups">${spans.map(s =>
+    `<th colspan="${s.span}" class="${s.group ? 'group group-' + s.group : ''}">`
+    + `${s.group ? COLUMN_GROUPS[s.group] : ''}</th>`).join('')}</tr>`;
+}
+
 function renderHead(marketKey) {
   const currency = tableState[marketKey].currency;
   const cols = getCols(marketKey);
-  const theadRow = document.querySelector(`thead tr[data-role="thead"][data-market="${marketKey}"]`);
-  theadRow.innerHTML = cols.map(c => {
+  const thead = document.querySelector(`thead[data-role="thead"][data-market="${marketKey}"]`);
+  const headers = cols.map(c => {
     const label = (c.dual || c.showCurrency) ? `${c.label} (${currency.toUpperCase()})` : c.label;
     return `<th data-key="${c.key}" data-market="${marketKey}">${label}</th>`;
   }).join('');
+  thead.innerHTML = groupHeaderHtml(cols) + `<tr>${headers}</tr>`;
   wireSortHeaders(marketKey);
   const sort = tableState[marketKey].sort;
-  const activeTh = theadRow.querySelector(`th[data-key="${sort.key}"]`);
+  const activeTh = thead.querySelector(`th[data-key="${sort.key}"]`);
   if (activeTh) activeTh.classList.add(sort.dir === 1 ? 'sorted-asc' : 'sorted-desc');
 }
 
 function wireSortHeaders(marketKey) {
   const cols = getCols(marketKey);
-  document.querySelectorAll(`#table-${marketKey} th`).forEach(th => {
+  document.querySelectorAll(`#table-${marketKey} th[data-key]`).forEach(th => {
     th.addEventListener('click', () => {
       const key = th.dataset.key;
       const col = cols.find(c => c.key === key);
       const cur = tableState[marketKey].sort;
       const dir = (cur && cur.key === key) ? -cur.dir : -1;
       tableState[marketKey].sort = { key, dir, dual: !!(col && col.dual) };
-      document.querySelectorAll(`#table-${marketKey} th`).forEach(h => h.classList.remove('sorted-asc','sorted-desc'));
+      document.querySelectorAll(`#table-${marketKey} th[data-key]`)
+        .forEach(h => h.classList.remove('sorted-asc','sorted-desc'));
       th.classList.add(dir === 1 ? 'sorted-asc' : 'sorted-desc');
       applyFilters(marketKey, cols);
     });
