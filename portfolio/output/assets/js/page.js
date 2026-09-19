@@ -35,11 +35,13 @@ function buildPage(marketKey) {
     if (anyApprox) {
       html += `<div class="approx-note">Uno o mas portfolios tienen posiciones con montos aproximados en la moneda no nativa (se convirtieron al tipo de cambio de HOY para esa operacion puntual, no historico). Mira el detalle en la pestana de cada tipo de instrumento.</div>`;
     }
-    // same two charts as the per-instrument-type tabs, except here each bar and
-    // each slice is a whole portfolio instead of a single position.
+    // same charts as the per-instrument-type tabs, except here each bar and
+    // each slice is a whole portfolio instead of a single position; the
+    // sector chart aggregates every underlying position across portfolios.
     html += `<div class="charts">
       <div class="chart-card"><canvas id="bar-${marketKey}"></canvas></div>
       <div class="chart-card"><canvas id="pie-${marketKey}"></canvas></div>
+      <div class="chart-card"><canvas id="sector-${marketKey}"></canvas></div>
     </div>`;
     html += `<div class="toolbar">
       ${yearSelectHtml(marketKey, allBuyYears())}
@@ -47,6 +49,9 @@ function buildPage(marketKey) {
         <option value="ars" ${defaultCurrency==='ars'?'selected':''}>Moneda: ARS</option>
         <option value="usd" ${defaultCurrency==='usd'?'selected':''}>Moneda: USD</option>
       </select>
+      <label class="toolbar-check">
+        <input type="checkbox" data-role="excludersu" data-market="${marketKey}"> Excluir RSU
+      </label>
     </div>`;
   } else {
     const rows = DATA.markets[marketKey].rows;
@@ -60,6 +65,7 @@ function buildPage(marketKey) {
     html += `<div class="charts">
       <div class="chart-card"><canvas id="bar-${marketKey}"></canvas></div>
       <div class="chart-card"><canvas id="pie-${marketKey}"></canvas></div>
+      <div class="chart-card"><canvas id="sector-${marketKey}"></canvas></div>
     </div>`;
 
     const sectorOptions = uniqueSorted(rows, 'sector');

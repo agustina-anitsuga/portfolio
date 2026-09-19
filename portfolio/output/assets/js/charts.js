@@ -13,6 +13,29 @@ function chartSeries(marketKey, rows, currency) {
   }));
 }
 
+// Current value per sector (summed across positions), regardless of what the
+// bar/pie charts above are showing. The general tab has no sector of its own
+// (its rows are one per portfolio), so there it aggregates the sector of
+// every underlying position across all portfolios, honouring the general
+// tab's own year filter.
+function sectorSeries(marketKey, rows, currency) {
+  const bySector = new Map();
+  const add = (sector, value) => {
+    if (value === null || value === undefined) return;
+    bySector.set(sector, (bySector.get(sector) || 0) + value);
+  };
+  if (marketKey === 'general') {
+    generalPortfolioKeys().forEach(m => {
+      generalMarketRows(m).forEach(r => add(r.sector, r[`value_${currency}`]));
+    });
+  } else {
+    rows.forEach(r => add(r.sector, r[`value_${currency}`]));
+  }
+  return [...bySector.entries()]
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value);
+}
+
 function renderCharts(marketKey, filteredRows) {
   // Transacciones lists individual trades and Watchlist holds no position, so
   // in both cases there is nothing to aggregate.
@@ -32,6 +55,7 @@ function renderCharts(marketKey, filteredRows) {
   const top = chartSeries(marketKey, rows, currency)
     .sort((a, b) => (b.value || 0) - (a.value || 0))
     .slice(0, 10);
+  const palette = ['#6ea8fe','#3ddc84','#ffb84d','#ff5c5c','#c792ea','#4dd0e1','#f78fb3','#a0c980','#ffd166','#8d99ae'];
   const bar = new Chart(document.getElementById(`bar-${marketKey}`), {
     type: 'bar',
     data: { labels: top.map(r=>r.label), datasets: [
@@ -42,12 +66,21 @@ function renderCharts(marketKey, filteredRows) {
       x:{ticks:{color:'#9aa2b1'}}, y:{ticks:{color:'#9aa2b1'}}
     }}
   });
-  const palette = ['#6ea8fe','#3ddc84','#ffb84d','#ff5c5c','#c792ea','#4dd0e1','#f78fb3','#a0c980','#ffd166','#8d99ae'];
   const pie = new Chart(document.getElementById(`pie-${marketKey}`), {
     type: 'doughnut',
     data: { labels: top.map(r=>r.label), datasets: [{ data: top.map(r=>r.value||0), backgroundColor: palette }] },
     options: { plugins:{legend:{position:'bottom', labels:{color:'#e7e9ee', boxWidth:10, font:{size:10}}}} }
   });
-  chartInstances[marketKey] = [bar, pie];
+  const sectors = sectorSeries(marketKey, rows, currency);
+  const sector = new Chart(document.getElementById(`sector-${marketKey}`), {
+    type: 'bar',
+    data: { labels: sectors.map(s=>s.label), datasets: [
+      { label:`Valor Actual (${cur})`, data: sectors.map(s=>s.value), backgroundColor: palette },
+    ]},
+    options: { plugins:{legend:{display:false}}, scales:{
+      x:{ticks:{color:'#9aa2b1'}}, y:{ticks:{color:'#9aa2b1'}}
+    }}
+  });
+  chartInstances[marketKey] = [bar, pie, sector];
 }
 

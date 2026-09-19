@@ -41,7 +41,7 @@ function renderScopeNote(marketKey, filteredRows) {
   const el = document.getElementById(`scopenote-${marketKey}`);
   if (!el) return;
   const source = marketKey === 'general'
-    ? PORTFOLIO_KEYS.flatMap(m => generalMarketRows(m))
+    ? generalPortfolioKeys().flatMap(m => generalMarketRows(m))
     : filteredRows;
   const affected = [...new Set(source.filter(r => r.oversold).map(r => r.key))];
   if (!affected.length) { el.style.display = 'none'; el.textContent = ''; return; }

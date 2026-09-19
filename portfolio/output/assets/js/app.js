@@ -49,6 +49,11 @@ function initPage(marketKey) {
       if (hscrollSync[marketKey]) setTimeout(hscrollSync[marketKey], 0);
     });
   }
+
+  const excludeRsuEl = document.querySelector(`[data-role="excludersu"][data-market="${marketKey}"]`);
+  if (excludeRsuEl) {
+    excludeRsuEl.addEventListener('change', () => applyFilters(marketKey, cols));
+  }
 }
 
 // Click any ticker (in the per-type tables or in general) -> jump to the

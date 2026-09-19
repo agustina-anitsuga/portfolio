@@ -18,9 +18,16 @@ function _unpricedCount(rows) {
   return rows.filter(r => r.value_ars === null && r.value_usd === null).length;
 }
 
+// Portfolios the general tab aggregates -- all of them, unless the "Excluir
+// RSU" checkbox is on, to see the numbers without RSU in the mix.
+function generalPortfolioKeys() {
+  const el = document.querySelector('[data-role="excludersu"][data-market="general"]');
+  return (el && el.checked) ? PORTFOLIO_KEYS.filter(m => m !== 'rsu') : PORTFOLIO_KEYS;
+}
+
 function buildGeneralRows(currency) {
   const totalValue = computeGeneralTotals(currency).value;
-  return PORTFOLIO_KEYS.map(m => {
+  return generalPortfolioKeys().map(m => {
     const rows = generalMarketRows(m);
     const k = computeMarketKpis(rows, currency);
     return {
@@ -39,7 +46,7 @@ function buildGeneralRows(currency) {
 // Combined totals of every portfolio, for the pills at the top of the general
 // tab (the same total the "Total" row used to show).
 function computeGeneralTotals(currency) {
-  const parts = PORTFOLIO_KEYS.map(m => computeMarketKpis(generalMarketRows(m), currency));
+  const parts = generalPortfolioKeys().map(m => computeMarketKpis(generalMarketRows(m), currency));
   const invested = parts.reduce((s, k) => s + (k.invested || 0), 0);
   const value = parts.reduce((s, k) => s + (k.value || 0), 0);
   const pl_abs = value - invested;
@@ -49,7 +56,7 @@ function computeGeneralTotals(currency) {
 }
 
 function computeGeneralUnpriced() {
-  return PORTFOLIO_KEYS.reduce((s, m) => s + _unpricedCount(generalMarketRows(m)), 0);
+  return generalPortfolioKeys().reduce((s, m) => s + _unpricedCount(generalMarketRows(m)), 0);
 }
 
 function _sumOrNone(rows, key) {
