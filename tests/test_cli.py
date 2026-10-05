@@ -16,10 +16,12 @@ class FakeApp:
     def __init__(self):
         self.asked_for = []
         self.watchlist_requested = []
+        self.annual_requested = []
 
-    def snapshot(self, xlsx_path, with_watchlist=True):
+    def snapshot(self, xlsx_path, with_watchlist=True, with_annual=True):
         self.asked_for.append(xlsx_path)
         self.watchlist_requested.append(with_watchlist)
+        self.annual_requested.append(with_annual)
         reports = {key: MarketReport(Market.get(key), []) for key in Market.keys()}
         reports["usd"] = MarketReport(USD_MARKET, [make_holding(instrument=make_instrument("AAA"))])
         return PortfolioSnapshot(reports=reports, fx=FxRate(1450.0, "PPI"))
@@ -77,6 +79,18 @@ def test_no_watchlist_skips_it(tmp_path, cli, capsys):
     dashboard, app = cli
     dashboard.run(["portfolio.xlsx", "--out-html", str(tmp_path / "d.html"), "--no-watchlist"])
     assert app.watchlist_requested == [False]
+
+
+def test_the_annual_tab_is_computed_by_default(tmp_path, cli, capsys):
+    dashboard, app = cli
+    dashboard.run(["portfolio.xlsx", "--out-html", str(tmp_path / "d.html")])
+    assert app.annual_requested == [True]
+
+
+def test_no_annual_skips_it(tmp_path, cli, capsys):
+    dashboard, app = cli
+    dashboard.run(["portfolio.xlsx", "--out-html", str(tmp_path / "d.html"), "--no-annual"])
+    assert app.annual_requested == [False]
 
 
 def test_a_successful_run_returns_zero(tmp_path, cli, capsys):

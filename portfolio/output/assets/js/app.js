@@ -2,13 +2,14 @@ function initPage(marketKey) {
   const isGeneral = marketKey === 'general';
   const isTx = marketKey === 'tx';
   const isWatch = marketKey === 'watch';
+  const isAnnual = marketKey === 'annual';
   const cols = getCols(marketKey);
   tableState[marketKey] = {
     currency: DEFAULT_CURRENCY[marketKey] || 'ars',
     sort: {
-      key: isGeneral ? 'pl_abs' : (isTx ? 'date' : (isWatch ? 'score' : 'value')),
+      key: isGeneral ? 'pl_abs' : (isTx ? 'date' : (isWatch ? 'score' : (isAnnual ? 'year' : 'value'))),
       dir: -1,
-      dual: !isGeneral && !isTx && !isWatch,
+      dual: !isGeneral && !isTx && !isWatch && !isAnnual,
     },
   };
 
@@ -24,7 +25,7 @@ function initPage(marketKey) {
   } else if (isWatch) {
     document.querySelector(`[data-role="search"][data-market="watch"]`)
       .addEventListener('input', () => applyFilters('watch', cols));
-  } else if (!isGeneral) {
+  } else if (!isGeneral && !isAnnual) {
     document.querySelector(`[data-role="search"][data-market="${marketKey}"]`)
       .addEventListener('input', () => applyFilters(marketKey, cols));
     document.querySelector(`[data-role="sector"][data-market="${marketKey}"]`)
@@ -68,6 +69,15 @@ function goToTicker(ticker) {
 pagesEl.addEventListener('click', (e) => {
   const t = e.target.closest('.ticker-link');
   if (t) { goToTicker(t.dataset.ticker); return; }
+
+  // click on a year of the Anual tab -> open/close its instruments
+  const yearRow = e.target.closest('tr[data-year]');
+  if (yearRow) {
+    const year = yearRow.dataset.year;
+    if (annualExpanded.has(year)) annualExpanded.delete(year); else annualExpanded.add(year);
+    applyFilters('annual', getCols('annual'));
+    return;
+  }
 
   // click on a row of the general tab (not the Total) -> go to its detail
   const row = e.target.closest('tr[data-market-link]');

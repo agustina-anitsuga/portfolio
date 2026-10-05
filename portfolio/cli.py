@@ -17,7 +17,8 @@ class DashboardCli:
 
     def run(self, argv=None):
         args = self._parse_args(argv)
-        snapshot = self._app.snapshot(args.xlsx_path, with_watchlist=not args.no_watchlist)
+        snapshot = self._app.snapshot(args.xlsx_path, with_watchlist=not args.no_watchlist,
+                                   with_annual=not args.no_annual)
 
         HtmlDashboard(snapshot).write(args.out_html)
         generated = [args.out_html]
@@ -39,6 +40,10 @@ class DashboardCli:
                             help="No calcula la watchlist. Es la parte mas lenta de la corrida "
                                  "(dos consultas por instrumento vigilado) y no afecta al "
                                  "portfolio: la solapa queda vacia.")
+        parser.add_argument("--no-annual", action="store_true",
+                            help="No calcula la solapa Anual. Pide el precio de cierre de cada "
+                                 "anio de cada instrumento (muchas consultas a PPI/Yahoo) y no "
+                                 "afecta al resto del portfolio: la solapa queda vacia.")
         return parser.parse_args(argv)
 
 

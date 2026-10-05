@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Builds the whole portfolio out of the spreadsheet and the market."""
 
+from .annual_summary import AnnualSummary
 from .position_tracker import PositionTracker
 from .report_builder import ReportBuilder
 from .snapshot import PortfolioSnapshot
@@ -16,23 +17,32 @@ class SnapshotBuilder:
     from what was traded in 2025.
     """
 
-    def __init__(self, workbook, prices, fx, watchlist=None):
+    def __init__(self, workbook, prices, fx, watchlist=None, history=None):
         self._workbook = workbook
         self._prices = prices
         self._fx = fx
         self._watchlist = watchlist
+        self._history = history
         self._reports = ReportBuilder(workbook, prices)
 
     def build(self):
         positions = self._positions()
         reports = self._reports.build(positions)
+        reports_by_year = {y: self._reports.build(self._positions(y)) for y in self._buy_years(positions)}
         return PortfolioSnapshot(
             reports=reports,
-            reports_by_year={y: self._reports.build(self._positions(y)) for y in self._buy_years(positions)},
+            reports_by_year=reports_by_year,
+            annual=self._annual(reports_by_year),
             fx=self._fx,
             transactions=TransactionLedger(self._workbook.all_transactions(), reports).rows(),
             watchlist=self._watched_rows(),
         )
+
+    def _annual(self, reports_by_year):
+        """Needs historical prices; without them the tab is simply empty."""
+        if self._history is None:
+            return []
+        return AnnualSummary(reports_by_year, self._history).rows()
 
     def _watched_rows(self):
         """La watchlist no tiene posiciones: son instrumentos que se siguen sin

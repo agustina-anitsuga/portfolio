@@ -8,6 +8,7 @@ from .trend import Trend
 
 MISSING_INSTRUMENT_META = "falta Tipo PPI o Settlement PPI en la hoja instrumentos"
 TREND_DAYS = 30
+CLOSE_LOOKBACK_DAYS = 10    # the last trading day on or before a date can be days away
 
 
 class PpiMarketData:
@@ -39,6 +40,24 @@ class PpiMarketData:
             return Trend.empty()
         value, _ = self._session.call(lambda: self._read_trend(ticker, ppi_type, settlement))
         return value or Trend.empty()
+
+    def close_on(self, ticker, ppi_type, settlement, date):
+        """(last close on or before `date`, reason_if_it_failed)."""
+        if not self._session.available:
+            return None, NO_CLIENT
+        if not ppi_type or not settlement:
+            return None, MISSING_INSTRUMENT_META
+        return self._session.call(lambda: self._read_close(ticker, ppi_type, settlement, date))
+
+    def _read_close(self, ticker, ppi_type, settlement, date):
+        date_to = dt.datetime.combine(date, dt.time(23, 59))
+        date_from = date_to - dt.timedelta(days=CLOSE_LOOKBACK_DAYS)
+        history = self._session.client.marketdata.search(ticker, ppi_type, settlement, date_from, date_to)
+        points = [h for h in (history or []) if isinstance(h, dict) and h.get("price")]
+        if not points:
+            return None, "sin historico alrededor de esa fecha"
+        points.sort(key=lambda h: str(h.get("date", "")))
+        return self._per_unit(float(points[-1]["price"]), ppi_type), None
 
     def mep_rate(self):
         """Implicit MEP dollar: price in ARS of AL30 / price in USD of AL30D

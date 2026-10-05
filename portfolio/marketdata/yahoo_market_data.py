@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Price fallback via Yahoo Finance."""
 
+import datetime as dt
+
 try:
     import yfinance as yf
     HAVE_YFINANCE = True
@@ -31,6 +33,22 @@ class YahooMarketData:
                 return price, None
             last_error = error or last_error
         return None, self._failure_reason(ticker, last_error)
+
+    def close_on(self, ticker, date):
+        """(last close on or before `date`, reason_if_it_failed)."""
+        if not HAVE_YFINANCE:
+            return None, NOT_INSTALLED
+        start = date - dt.timedelta(days=10)
+        try:
+            history = yf.Ticker(ticker).history(start=start.isoformat(),
+                                                end=(date + dt.timedelta(days=1)).isoformat())
+        except Exception as e:
+            return None, e
+        if history is not None and not history.empty:
+            closes = history["Close"].dropna()
+            if len(closes):
+                return float(closes.iloc[-1]), None
+        return None, f"Yahoo Finance sin historico de '{ticker}' al {date.isoformat()}"
 
     @staticmethod
     def _failure_reason(ticker, last_error):

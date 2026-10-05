@@ -9,7 +9,19 @@ function buildPage(marketKey) {
 
   let html = '';
 
-  if (marketKey === 'watch') {
+  if (marketKey === 'annual') {
+    html += `<div class="approx-note">Cada año muestra lo que operaste en ese año (click en un año para ver el detalle por instrumento). <strong>Compras</strong>: lo comprado. <strong>Invertido Neto</strong>: compras menos el costo de lo vendido ese año. <strong>Valor al Cierre</strong>: ese neto valuado al ultimo cierre del año (el año en curso usa el precio de hoy); queda vacio si falta algun precio historico. <strong>P&L a la Fecha</strong>: valor actual de ese neto contra lo invertido, sin contar ventas realizadas.</div>`;
+    html += `<div class="toolbar">
+      <select data-role="currency" data-market="${marketKey}">
+        <option value="ars" ${defaultCurrency==='ars'?'selected':''}>Moneda: ARS</option>
+        <option value="usd" ${defaultCurrency==='usd'?'selected':''}>Moneda: USD</option>
+      </select>
+      <label class="toolbar-check">
+        <input type="checkbox" data-role="excludersu" data-market="${marketKey}"> Excluir RSU
+      </label>
+      <span class="count" data-role="count" data-market="${marketKey}"></span>
+    </div>`;
+  } else if (marketKey === 'watch') {
     // no hay posicion ni moneda que elegir: son instrumentos que se siguen,
     // asi que alcanza con buscar por ticker o nombre.
     html += `<div class="toolbar">

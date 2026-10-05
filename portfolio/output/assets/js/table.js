@@ -18,9 +18,68 @@ function sparkline(series, pct) {
     + `</svg>`;
 }
 
+// Rows of the Anual tab. With "Excluir RSU" on, every year is rebuilt from its
+// instruments (the same sums Python does) leaving the RSU ones out.
+function annualRows() {
+  const el = document.querySelector('[data-role="excludersu"][data-market="annual"]');
+  if (!el || !el.checked) return DATA.annual;
+  return DATA.annual.map(r => {
+    const detail = r.detail.filter(d => d.market !== 'rsu');
+    const row = { year: r.year, detail };
+    for (const c of ['ars', 'usd']) {
+      const sum = key => detail.reduce((s, d) => s + d[`${key}_${c}`], 0);
+      const all = key => detail.every(d => d[`${key}_${c}`] !== null);
+      const net = sum('invested_net');
+      const close = all('close_value') ? sum('close_value') : null;
+      const gain = all('gain') ? sum('gain') : null;
+      row[`invested_gross_${c}`] = sum('invested_gross');
+      row[`invested_net_${c}`] = net;
+      row[`close_value_${c}`] = close;
+      row[`year_pct_${c}`] = (close !== null && net) ? (close - net) / net * 100 : null;
+      row[`gain_${c}`] = gain;
+      row[`gain_pct_${c}`] = (gain !== null && net) ? gain / net * 100 : null;
+    }
+    return row;
+  }).filter(r => r.detail.length);
+}
+
+// Years of the Anual tab that are open to show their instruments.
+const annualExpanded = new Set();
+
+function annualCellHtml(r, c, currency) {
+  const v = cellValue(r, c, currency);
+  if (c.key === 'year') {
+    if (r.detail) return `<td><strong>${annualExpanded.has(r.year) ? '▾' : '▸'} ${v}</strong></td>`;
+    return `<td class="detail-name"><strong class="ticker-link" data-ticker="${r.key}">${r.key}</strong> `
+      + `<span class="tag">${TAB_LABELS[r.market] || r.market}</span> ${r.name || ''}</td>`;
+  }
+  if (v === null || v === undefined) return '<td>—</td>';
+  if (c.pct) return `<td class="${plClass(v)}">${fmtPct(v)}</td>`;
+  return `<td class="${c.pl ? plClass(v) : ''}">${fmt(v)}</td>`;
+}
+
+// One row per year; the open ones are followed by one row per instrument.
+function renderAnnualRows(rows, cols, currency) {
+  return rows.map(r => {
+    const open = annualExpanded.has(r.year);
+    const head = `<tr class="row-link" data-year="${r.year}">${cols.map(c => annualCellHtml(r, c, currency)).join('')}</tr>`;
+    if (!open) return head;
+    const detail = [...r.detail]
+      .sort((a, b) => (b[`invested_net_${currency}`] || 0) - (a[`invested_net_${currency}`] || 0))
+      .map(d => `<tr class="detail-row">${cols.map(c => annualCellHtml(d, c, currency)).join('')}</tr>`);
+    return head + detail.join('');
+  }).join('');
+}
+
 function renderRows(marketKey, rows, cols) {
   const currency = tableState[marketKey].currency;
   const tbody = document.querySelector(`#table-${marketKey} tbody`);
+  if (marketKey === 'annual') {
+    tbody.innerHTML = renderAnnualRows(rows, cols, currency);
+    const countEl = document.querySelector(`[data-role="count"][data-market="annual"]`);
+    if (countEl) countEl.textContent = `${rows.length} años`;
+    return;
+  }
   tbody.innerHTML = rows.map(r => {
     const rowClass = r.market ? 'row-link' : '';
     const rowAttr = r.market ? ` data-market-link="${r.market}"` : '';
@@ -50,6 +109,7 @@ function renderRows(marketKey, rows, cols) {
   if (countEl) {
     const total = marketKey === 'tx' ? DATA.transactions.length
                 : marketKey === 'watch' ? DATA.watchlist.length
+                : marketKey === 'annual' ? DATA.annual.length
                 : DATA.markets[marketKey].rows.length;
     countEl.textContent = `${rows.length} de ${total}`;
   }
@@ -64,6 +124,7 @@ function filterRows(marketKey) {
   if (marketKey === 'general') {
     return buildGeneralRows(currency);
   }
+  if (marketKey === 'annual') return annualRows();
   if (marketKey === 'watch') {
     const searchEl = document.querySelector(`[data-role="search"][data-market="watch"]`);
     const search = (searchEl.value || '').toLowerCase();
@@ -125,7 +186,7 @@ function applyFilters(marketKey, cols) {
   renderRows(marketKey, rows, cols);
   // the charts and the KPI pills (absent in Transacciones) are recomputed with
   // the same filtered subset shown in the table.
-  if (marketKey !== 'tx' && marketKey !== 'watch') {
+  if (marketKey !== 'tx' && marketKey !== 'watch' && marketKey !== 'annual') {
     renderCharts(marketKey, rows);
     renderKpis(marketKey, rows);
     renderUnpricedNote(marketKey, rows);

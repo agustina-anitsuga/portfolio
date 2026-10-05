@@ -142,6 +142,13 @@ puede saltear:
 python3 generate_dashboard.py portfolio.xlsx --out-html portfolio.html --no-watchlist
 ```
 
+La solapa Anual pide el precio de cierre de cada año de cada instrumento
+(muchas consultas a PPI/Yahoo). Para saltearla, y dejarla vacia:
+
+```bash
+python3 generate_dashboard.py portfolio.xlsx --out-html portfolio.html --no-annual
+```
+
 ## Tests
 
 ```bash

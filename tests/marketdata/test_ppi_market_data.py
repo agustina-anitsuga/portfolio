@@ -139,3 +139,16 @@ def test_mep_rate_names_both_legs_when_neither_quotes():
     ppi, _ = market_data(current={})
     _, reason = ppi.mep_rate()
     assert "AL30 y AL30D" in reason
+
+
+def test_close_on_returns_the_last_price_of_the_window_per_unit():
+    from doubles import FakeSession
+    class Client:
+        class marketdata:
+            @staticmethod
+            def search(*args):
+                return [{"date": "2025-12-29", "price": 9000.0}, {"date": "2025-12-30", "price": 10000.0}]
+    import datetime as dt
+    data = PpiMarketData(FakeSession(Client()))
+    assert data.close_on("AL30", "BONOS", "INMEDIATA", dt.date(2025, 12, 31)) == (100.0, None)
+    assert data.close_on("AAA", "ACCIONES", "A-48HS", dt.date(2025, 12, 31)) == (10000.0, None)

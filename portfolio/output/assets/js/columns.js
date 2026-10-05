@@ -1,5 +1,5 @@
-const MARKET_KEYS = ['general', 'usd', 'cedears', 'merval', 'rsu', 'bonds', 'tx', 'watch'];
-const TAB_LABELS = { general: 'General', usd: 'US Stocks', cedears: 'Cedears', merval: 'Acciones Merval', rsu: 'RSU', bonds: 'Bonos', tx: 'Transacciones', watch: 'Watchlist' };
+const MARKET_KEYS = ['general', 'usd', 'cedears', 'merval', 'rsu', 'bonds', 'tx', 'annual', 'watch'];
+const TAB_LABELS = { general: 'General', usd: 'US Stocks', cedears: 'Cedears', merval: 'Acciones Merval', rsu: 'RSU', bonds: 'Bonos', tx: 'Transacciones', annual: 'Anual', watch: 'Watchlist' };
 
 // "real" portfolios (not general/tx) -- used to build the combined totals of
 // the General tab without repeating the list everywhere.
@@ -10,7 +10,7 @@ const pagesEl = document.getElementById('pages');
 
 // Each table shows ONE currency at a time (the base columns plus the 10
 // "dual" columns resolved by that tab own currency filter).
-const DEFAULT_CURRENCY = { general: 'usd', usd: 'usd', cedears: 'ars', merval: 'ars', rsu: 'usd', bonds: 'ars' };
+const DEFAULT_CURRENCY = { general: 'usd', usd: 'usd', cedears: 'ars', merval: 'ars', rsu: 'usd', bonds: 'ars', annual: 'usd' };
 
 const COLUMNS_BASE = [
   {key:'key', label:'Ticker'},
@@ -18,7 +18,6 @@ const COLUMNS_BASE = [
   {key:'sector', label:'Sector'},
   {key:'instrument_type', label:'Tipo'},
   {key:'units', label:'Unid.', num:true},
-  {key:'units_sold', label:'Unid. Vend.', num:true},
   // drawn as a line (spark), but the value is still the % -- that is what
   // sorts the column on click and what shows up in the tooltip.
   {key:'trend_30d', label:'Tend. 30d', num:true, pct:true, spark:true},
@@ -31,10 +30,28 @@ const COLUMNS_DUAL = [
   {key:'value', label:'Valor Actual', num:true, dual:true},
   {key:'pl_abs', label:'P&L $', num:true, pl:true, dual:true},
   {key:'pl_pct', label:'P&L %', num:true, pl:true, pct:true, dual:true},
+  {key:'units_sold', label:'Unid. Vend.', num:true},
   {key:'cost_of_sales', label:'Costo Ventas', num:true, dual:true},
   {key:'income_from_sales', label:'Ingreso Ventas', num:true, dual:true},
   {key:'realized_abs', label:'P&L Realiz. $', num:true, pl:true, dual:true},
   {key:'realized_pct', label:'P&L Realiz. %', num:true, pl:true, pct:true, dual:true},
+];
+
+// "Anual" tab: one row per year with purchases. Each year is its own scope
+// (the same one the year filter uses): what was bought that year, gross and
+// net of what was sold that year, what that net position was worth at the
+// close of the year, and what it is worth today.
+const ANNUAL_COLUMNS = [
+  {key:'year', label:'Año'},
+  {key:'units_bought', label:'Unid. Compradas', num:true},
+  {key:'units', label:'Unid. al Cierre', num:true},
+  {key:'invested_gross', label:'Compras', num:true, dual:true},
+  {key:'invested_net', label:'Invertido Neto', num:true, dual:true},
+  {key:'close_price', label:'Precio al Cierre', num:true, dual:true},
+  {key:'close_value', label:'Valor al Cierre', num:true, dual:true},
+  {key:'year_pct', label:'P&L % del Año', num:true, pl:true, pct:true, dual:true},
+  {key:'gain', label:'P&L $ a la Fecha', num:true, pl:true, dual:true},
+  {key:'gain_pct', label:'P&L % a la Fecha', num:true, pl:true, pct:true, dual:true},
 ];
 
 // Only bonds have these: they come from PPI's bond calculator. TIR, parity and
@@ -117,6 +134,7 @@ const WATCHLIST_COLUMNS = [
 function getCols(marketKey) {
   if (marketKey === 'general') return GENERAL_COLUMNS;
   if (marketKey === 'tx') return TX_COLUMNS;
+  if (marketKey === 'annual') return ANNUAL_COLUMNS;
   if (marketKey === 'watch') return WATCHLIST_COLUMNS;
   if (marketKey === 'bonds') return [...COLUMNS_BASE, ...BOND_COLUMNS, ...COLUMNS_DUAL];
   return [...COLUMNS_BASE, ...COLUMNS_DUAL];

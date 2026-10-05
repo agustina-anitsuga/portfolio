@@ -83,3 +83,9 @@ def test_the_watchlist_is_built_by_default(spreadsheet, tmp_path):
                                watchlist=WatchlistBuilder(Source()))
     assert [r["ticker"] for r in application.snapshot(spreadsheet).watchlist] == ["AAPL"]
     assert application.snapshot(spreadsheet, with_watchlist=False).watchlist == []
+
+
+def test_without_annual_the_tab_is_empty_and_no_history_is_asked(spreadsheet):
+    ppi = FakePpi()
+    application = PortfolioApp(ppi=ppi, yahoo=FakeYahoo(), bonds=None, watchlist=None)
+    assert application.snapshot(spreadsheet, with_annual=False).annual == []

@@ -65,7 +65,7 @@ function marketYears(m) {
 
 function yearSelectHtml(marketKey, years) {
   return `<select data-role="year" data-market="${marketKey}">
-        <option value="">Todos los anios</option>
+        <option value="">Todos los años</option>
         ${years.map(y => `<option value="${y}">Comprado en ${y}</option>`).join('')}
       </select>`;
 }

@@ -20,6 +20,7 @@ class DashboardPayload:
             "general": self._general(),
             "transactions": self._snapshot.transactions,
             "watchlist": self._snapshot.watchlist,
+            "annual": self._snapshot.annual,
             "years": self._snapshot.years,
             "fx_rate": self._snapshot.fx.value,
             "fx_source": self._snapshot.fx.source,

@@ -29,7 +29,7 @@ def payload(**kwargs):
 
 
 def test_the_payload_has_the_sections_the_page_reads():
-    assert set(payload()) == {"markets", "general", "transactions", "watchlist", "years",
+    assert set(payload()) == {"markets", "general", "transactions", "watchlist", "annual", "years",
                               "fx_rate", "fx_source", "generated_at"}
 
 

@@ -39,7 +39,7 @@ function sectorSeries(marketKey, rows, currency) {
 function renderCharts(marketKey, filteredRows) {
   // Transacciones lists individual trades and Watchlist holds no position, so
   // in both cases there is nothing to aggregate.
-  if (marketKey === 'tx' || marketKey === 'watch') return;
+  if (marketKey === 'tx' || marketKey === 'watch' || marketKey === 'annual') return;
 
   const currency = tableState[marketKey].currency;
   const cur = currency.toUpperCase();

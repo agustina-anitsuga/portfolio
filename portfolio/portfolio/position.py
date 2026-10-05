@@ -20,7 +20,9 @@ class Position:
     def __init__(self):
         self.units = 0.0
         self.units_sold = 0.0
+        self.units_bought = 0.0         # gross purchases, before discounting sales
         self.cost_basis = _zero()
+        self.cost_bought = _zero()      # gross purchases, before discounting sales
         self.cost_of_sales = _zero()
         self.income_from_sales = _zero()
         self.oversold = False
@@ -56,8 +58,10 @@ class Position:
         if not in_scope:
             return
         self.units += units
+        self.units_bought += units
         for currency in CURRENCIES:
             self.cost_basis[currency] += amounts[currency]
+            self.cost_bought[currency] += amounts[currency]
 
     def sell(self, units, amounts, in_scope):
         if units > self._real_units + EPSILON:
