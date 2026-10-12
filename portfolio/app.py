@@ -33,8 +33,10 @@ class PortfolioApp:
         the year-end prices (one history request per instrument and year), so
         the annual tab stays empty."""
         workbook = PortfolioWorkbook(xlsx_path)
-        fx = FxRateProvider(self._ppi).resolve(workbook.manual_fx)
+        rates = FxRateProvider(self._ppi)
+        fx = rates.resolve(workbook.manual_fx)
+        ccl = rates.resolve_ccl(workbook.manual_ccl)
         prices = PriceResolver(self._ppi, self._yahoo, fx, self._bonds)
         watchlist = self._watchlist if with_watchlist else None
         history = HistoricalPrices(self._ppi, self._yahoo) if with_annual else None
-        return SnapshotBuilder(workbook, prices, fx, watchlist, history).build()
+        return SnapshotBuilder(workbook, prices, fx, watchlist, history, ccl).build()
