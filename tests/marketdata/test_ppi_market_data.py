@@ -152,3 +152,14 @@ def test_close_on_returns_the_last_price_of_the_window_per_unit():
     data = PpiMarketData(FakeSession(Client()))
     assert data.close_on("AL30", "BONOS", "INMEDIATA", dt.date(2025, 12, 31)) == (100.0, None)
     assert data.close_on("AAA", "ACCIONES", "A-48HS", dt.date(2025, 12, 31)) == (10000.0, None)
+
+
+def test_ccl_rate_divides_al30_by_al30c():
+    ppi, _ = market_data(current=lambda ticker: {"price": 150000.0 if ticker == "AL30" else 100.0})
+    assert ppi.ccl_rate() == (pytest.approx(1500.0), None)
+
+
+def test_ccl_rate_names_the_leg_that_did_not_quote():
+    ppi, _ = market_data(current=lambda ticker: {"price": 1.0} if ticker == "AL30" else {})
+    rate, reason = ppi.ccl_rate()
+    assert rate is None and "AL30C" in reason

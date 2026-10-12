@@ -1,4 +1,5 @@
 function initPage(marketKey) {
+  if (marketKey === 'aporte') return; // sin tabla ni filtros: es un panel fijo
   const isGeneral = marketKey === 'general';
   const isTx = marketKey === 'tx';
   const isWatch = marketKey === 'watch';

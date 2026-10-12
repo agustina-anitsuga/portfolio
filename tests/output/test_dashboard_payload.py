@@ -30,7 +30,7 @@ def payload(**kwargs):
 
 def test_the_payload_has_the_sections_the_page_reads():
     assert set(payload()) == {"markets", "general", "transactions", "watchlist", "annual", "years",
-                              "fx_rate", "fx_source", "generated_at"}
+                              "fx_rate", "fx_source", "contribution", "generated_at"}
 
 
 def test_every_market_is_present_even_when_empty():

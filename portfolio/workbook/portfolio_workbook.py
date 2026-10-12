@@ -5,6 +5,7 @@ import openpyxl
 
 from ..market import Market
 from .config_sheet import ConfigSheet
+from .contribution_sheet import ContributionSheet
 from .instrument import Instrument
 from .instrument_sheet import InstrumentSheet
 from .transaction_sheet import TransactionSheet
@@ -19,7 +20,10 @@ class PortfolioWorkbook:
     def __init__(self, path):
         workbook = openpyxl.load_workbook(path, data_only=True)
         self.instruments = InstrumentSheet(workbook).read()
-        self.manual_fx = ConfigSheet(workbook).manual_fx()
+        config = ConfigSheet(workbook)
+        self.manual_fx = config.manual_fx()
+        self.manual_ccl = config.manual_ccl()
+        self.contribution = ContributionSheet(workbook).plan()
         self.watchlist = WatchlistSheet(workbook).tickers()
         self._sheets = {m.key: TransactionSheet(workbook, m) for m in Market.all()}
         self._chronological = {k: s.chronological() for k, s in self._sheets.items()}

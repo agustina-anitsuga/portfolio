@@ -9,6 +9,11 @@ function buildPage(marketKey) {
 
   let html = '';
 
+  if (marketKey === 'aporte') {
+    page.innerHTML = contributionHtml();
+    return page;
+  }
+
   if (marketKey === 'annual') {
     html += `<div class="approx-note">Cada año muestra lo que operaste en ese año (click en un año para ver el detalle por instrumento). <strong>Compras</strong>: lo comprado. <strong>Invertido Neto</strong>: compras menos el costo de lo vendido ese año. <strong>Valor al Cierre</strong>: ese neto valuado al ultimo cierre del año (el año en curso usa el precio de hoy); queda vacio si falta algun precio historico. <strong>P&L a la Fecha</strong>: valor actual de ese neto contra lo invertido, sin contar ventas realizadas.</div>`;
     html += `<div class="toolbar">

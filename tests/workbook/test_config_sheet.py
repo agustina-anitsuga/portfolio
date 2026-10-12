@@ -43,3 +43,12 @@ def test_a_missing_config_sheet_is_not_an_error():
 def test_the_last_matching_row_wins():
     workbook = config_with([("USD/ARS viejo", 1000.0), ("USD/ARS Manual", 1450.0)])
     assert ConfigSheet(workbook).manual_fx() == 1450.0
+
+
+def test_reads_the_manual_ccl_rate_apart_from_the_mep_one():
+    sheet = ConfigSheet(config_with([("USD/ARS Manual", 1450.0), ("USD/CCL Manual", 1500.0)]))
+    assert (sheet.manual_fx(), sheet.manual_ccl()) == (1450.0, 1500.0)
+
+
+def test_without_a_ccl_row_there_is_no_manual_ccl():
+    assert ConfigSheet(config_with([("USD/ARS Manual", 1450.0)])).manual_ccl() is None

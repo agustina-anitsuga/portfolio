@@ -15,7 +15,7 @@ class HtmlDashboard:
 
     # order matters: the modules are concatenated into a single <script>.
     JS_MODULES = ("format.js", "columns.js", "rows.js", "kpis.js",
-                  "page.js", "table.js", "charts.js", "app.js")
+                  "contribution.js", "page.js", "table.js", "charts.js", "app.js")
 
     def __init__(self, snapshot, now=None):
         self._payload = DashboardPayload(snapshot, now)

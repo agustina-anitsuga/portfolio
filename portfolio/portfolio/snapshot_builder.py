@@ -2,6 +2,7 @@
 """Builds the whole portfolio out of the spreadsheet and the market."""
 
 from .annual_summary import AnnualSummary
+from .contribution_plan import ContributionPlan
 from .position_tracker import PositionTracker
 from .report_builder import ReportBuilder
 from .snapshot import PortfolioSnapshot
@@ -17,12 +18,13 @@ class SnapshotBuilder:
     from what was traded in 2025.
     """
 
-    def __init__(self, workbook, prices, fx, watchlist=None, history=None):
+    def __init__(self, workbook, prices, fx, watchlist=None, history=None, ccl=None):
         self._workbook = workbook
         self._prices = prices
         self._fx = fx
         self._watchlist = watchlist
         self._history = history
+        self._ccl = ccl
         self._reports = ReportBuilder(workbook, prices)
 
     def build(self):
@@ -36,6 +38,8 @@ class SnapshotBuilder:
             fx=self._fx,
             transactions=TransactionLedger(self._workbook.all_transactions(), reports).rows(),
             watchlist=self._watched_rows(),
+            ccl=self._ccl,
+            contribution=ContributionPlan(self._workbook.contribution, self._ccl).as_dict(),
         )
 
     def _annual(self, reports_by_year):

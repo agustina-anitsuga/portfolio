@@ -24,6 +24,7 @@ class DashboardPayload:
             "years": self._snapshot.years,
             "fx_rate": self._snapshot.fx.value,
             "fx_source": self._snapshot.fx.source,
+            "contribution": self._snapshot.contribution,
             "generated_at": self._now.strftime("%Y-%m-%d %H:%M"),
         }
 

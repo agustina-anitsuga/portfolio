@@ -28,11 +28,13 @@ BONDS_MARKET = Market.get("bonds")
 class FakePpi:
     """Stands in for PpiMarketData. Records what was asked, answers canned."""
 
-    def __init__(self, prices=None, trends=None, mep=(None, "sin mercado"), closes=None):
+    def __init__(self, prices=None, trends=None, mep=(None, "sin mercado"), closes=None,
+                 ccl=(None, "sin mercado")):
         self._closes = closes or {}   # (ticker, year) -> (price, reason)
         self._prices = prices or {}
         self._trends = trends or {}
         self._mep = mep
+        self._ccl = ccl
         self.price_calls = []
         self.trend_calls = []
 
@@ -46,6 +48,9 @@ class FakePpi:
 
     def mep_rate(self):
         return self._mep
+
+    def ccl_rate(self):
+        return self._ccl
 
     def close_on(self, ticker, ppi_type, settlement, date):
         return self._closes.get((ticker, date.year), (None, "sin historico de PPI"))

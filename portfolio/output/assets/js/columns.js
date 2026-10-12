@@ -1,5 +1,5 @@
-const MARKET_KEYS = ['general', 'usd', 'cedears', 'merval', 'rsu', 'bonds', 'tx', 'annual', 'watch'];
-const TAB_LABELS = { general: 'General', usd: 'US Stocks', cedears: 'Cedears', merval: 'Acciones Merval', rsu: 'RSU', bonds: 'Bonos', tx: 'Transacciones', annual: 'Anual', watch: 'Watchlist' };
+const MARKET_KEYS = ['general', 'usd', 'cedears', 'merval', 'rsu', 'bonds', 'tx', 'annual', 'aporte', 'watch'];
+const TAB_LABELS = { general: 'General', usd: 'US Stocks', cedears: 'Cedears', merval: 'Acciones Merval', rsu: 'RSU', bonds: 'Bonos', tx: 'Transacciones', annual: 'Anual', aporte: 'Aporte mensual', watch: 'Watchlist' };
 
 // "real" portfolios (not general/tx) -- used to build the combined totals of
 // the General tab without repeating the list everywhere.

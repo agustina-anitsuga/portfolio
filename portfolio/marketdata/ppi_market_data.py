@@ -70,6 +70,11 @@ class PpiMarketData:
         """
         return self._session.call(self._read_mep_rate)
 
+    def ccl_rate(self):
+        """Implicit CCL dollar: AL30 in ARS / AL30C (the same bond settled in
+        dollars abroad). Same caveat as the MEP: it needs BYMA to be open."""
+        return self._session.call(lambda: self._read_implicit_rate("AL30C"))
+
     def _read_price(self, ticker, ppi_type, settlement):
         data = self._session.client.marketdata.current(ticker, ppi_type, settlement)
         if not isinstance(data, dict):
@@ -101,10 +106,14 @@ class PpiMarketData:
         return trend, None
 
     def _read_mep_rate(self):
+        return self._read_implicit_rate("AL30D")
+
+    def _read_implicit_rate(self, dollar_ticker):
         current = self._session.client.marketdata.current
-        prices = {t: self._quoted_price(current(t, "BONOS", "INMEDIATA")) for t in ("AL30", "AL30D")}
-        if prices["AL30"] and prices["AL30D"]:
-            return prices["AL30"] / prices["AL30D"], None
+        tickers = ("AL30", dollar_ticker)
+        prices = {t: self._quoted_price(current(t, "BONOS", "INMEDIATA")) for t in tickers}
+        if all(prices.values()):
+            return prices["AL30"] / prices[dollar_ticker], None
         missing = [t for t, p in prices.items() if not p]
         return None, (f"PPI no devolvio precio para {' y '.join(missing)} "
                       f"(probablemente fuera del horario de mercado)")
