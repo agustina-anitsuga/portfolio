@@ -7,6 +7,7 @@ market or a missing API key.
 """
 
 import datetime as dt
+from contextlib import contextmanager
 
 import openpyxl
 
@@ -177,3 +178,19 @@ def write_workbook(path, instruments=(), manual_fx=None, sheets=None, skip=(), c
                 sheet.append(list(row))
     workbook.save(path)
     return str(path)
+
+
+class FakeSheet:
+    """Stands in for GoogleSheet: hands out a fixed path, no network."""
+
+    def __init__(self, path="/tmp/drive-export.xlsx",
+                 modified_time=dt.datetime(2026, 11, 10, 14, 32,
+                                           tzinfo=dt.timezone(dt.timedelta(hours=-3)))):
+        self.path = path
+        self.modified_time = modified_time
+        self.downloads = 0
+
+    @contextmanager
+    def downloaded(self):
+        self.downloads += 1
+        yield self.path

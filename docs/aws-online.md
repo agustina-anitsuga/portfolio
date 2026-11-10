@@ -3,6 +3,67 @@
 Objetivo: abrir el dashboard desde cualquier lado y recalcular el P&L a demanda,
 sin dejar una maquina prendida y con las credenciales de PPI fuera del HTML.
 
+## Estado: implementado (etapas 0 a 3)
+
+El codigo esta en `portfolio/cloud/` (handlers) y `aws/` (infraestructura y
+scripts). Diferencias con el plan original y por que:
+
+| Plan | Implementado | Motivo |
+|---|---|---|
+| Lambda como imagen de contenedor | Zip con wheels de Linux (`aws/build.sh`), 166 MB descomprimido | No hay Docker en la maquina; entra en el limite de 250 MB recortando tests de pandas/numpy |
+| Secrets Manager | SSM Parameter Store `SecureString` (`portfolio-ppi`) | Mismo cifrado KMS, gratis (Secrets Manager cuesta ~0,40 USD/mes) |
+| Clave de Google en un secreto | Workload Identity Federation (`portfolio-google-credentials`, sin secretos) | La organizacion de Google bloquea crear claves JSON |
+| HTML pide `latest.json` con `fetch` | El worker genera el mismo HTML autocontenido de siempre y la pagina lo muestra en un iframe con un link firmado de S3 (5 min) | Cero cambios en el JS del dashboard y el modo archivo local sigue igual |
+| Cognito + Lambda@Edge para proteger la pagina | La pagina de CloudFront es solo el login y el boton, sin datos; los datos salen de la API con JWT | Menos piezas, misma proteccion |
+| Camino rapido / lento | Un solo camino: cada recalculo hace todo (incluida Anual y watchlist) | Al ser asincrono no hay limite de 29 s; la Lambda tiene 15 min. Optimizar si resulta lento |
+
+Pendiente (etapa 4): refresh programado con EventBridge, cache persistente de
+cierres historicos y alarma si falla.
+
+### Despliegue
+
+```bash
+source keys.txt
+aws/setup-params.sh                                   # claves de PPI -> SSM
+GCP_PROJECT=<proyecto> GCP_SERVICE_ACCOUNT=<email> aws/google-wif.sh   # Google sin claves
+ADMIN_EMAIL=<tu email> aws/deploy.sh                  # build + stack + pagina
+```
+
+`deploy.sh` imprime la URL. El primer ingreso usa la contrasena temporal que
+Cognito manda por mail, pide una nueva y configurar MFA con una app TOTP.
+Para borrar todo: vaciar los buckets `portfolio-site-*` y `portfolio-data-*`,
+`sam delete --stack-name portfolio`, y borrar `portfolio-deploy-*` y los dos
+parametros de SSM.
+
+### Nombres y etiquetas
+
+Todo recurso con nombre empieza por `portfolio` y todo recurso que acepta
+etiquetas lleva `project=portfolio` (ademas el stack se etiqueta y
+CloudFormation lo propaga). `aws/check-naming.sh` lo verifica despues de cada
+deploy. Fuera del stack: el bucket de despliegue `portfolio-deploy-<cuenta>`
+(reemplaza al `aws-sam-cli-managed-default-*` que crearia SAM) y los
+parametros `portfolio-ppi` y `portfolio-google-credentials`. En Google Cloud:
+pool `portfolio-aws` y provider `portfolio-aws-provider`.
+
+Recursos que AWS no permite etiquetar (cuelgan de uno que si lo esta): la
+politica del bucket, los permisos de invocacion de Lambda, la configuracion
+de invocacion asincrona, el cliente, dominio, usuario y branding de Cognito, y
+el Origin Access Control de CloudFront (que igual se llama `portfolio-site`).
+
+### Piezas
+
+- `aws/template.yaml`: buckets (pagina y datos, ambos privados), CloudFront con
+  OAC, Cognito (un usuario, MFA obligatorio, managed login), HTTP API con
+  authorizer JWT, Lambda `portfolio-api` (rutas `GET /status`,
+  `GET /dashboard`, `POST /refresh`) y Lambda `portfolio-refresh` (worker,
+  15 min, sin reintentos).
+- `portfolio/cloud/status.py`: `status.json` en S3, compartido por API y worker.
+  Un "running" de mas de 16 min se considera muerto y no bloquea el boton.
+- `portfolio/cloud/worker.py`: lee las claves de SSM, baja la planilla de Drive,
+  calcula y sube `dashboard/index.html`. Usa hora argentina (UTC-3).
+- `aws/site/index.html`: login (OAuth code + PKCE), boton Recalcular con
+  polling cada 3 s, e iframe con el dashboard.
+
 ## Resumen de la propuesta
 
 Servicios administrados y sin servidores: **S3 + CloudFront** para la pagina,

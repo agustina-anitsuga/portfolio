@@ -1,11 +1,8 @@
 # -*- coding: utf-8 -*-
-import datetime as dt
-from contextlib import contextmanager
-
 import openpyxl
 import pytest
 
-from doubles import USD_MARKET, make_holding, make_instrument
+from doubles import USD_MARKET, FakeSheet, make_holding, make_instrument
 from portfolio.cli import DashboardCli, main
 from portfolio.market import Market
 from portfolio.marketdata.fx_rate import FxRate
@@ -107,19 +104,6 @@ def test_the_html_output_has_a_default_name(tmp_path, monkeypatch, cli, capsys):
     monkeypatch.chdir(tmp_path)
     dashboard.run(["portfolio.xlsx"])
     assert (tmp_path / "Portfolio Dashboard.html").exists()
-
-
-class FakeSheet:
-    """Stands in for GoogleSheet: hands out a fixed path, no network."""
-
-    def __init__(self):
-        self.modified_time = dt.datetime(2026, 11, 10, 14, 32)
-        self.downloads = 0
-
-    @contextmanager
-    def downloaded(self):
-        self.downloads += 1
-        yield "/tmp/drive-export.xlsx"
 
 
 def test_without_a_path_the_spreadsheet_comes_from_drive(tmp_path, capsys):

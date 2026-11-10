@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portfolio</title>
+<style>
+  :root { --bg:#f6f7f9; --fg:#1d2330; --muted:#667085; --line:#e3e6eb; --accent:#2f6fde; --err:#c0362c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171c; --fg:#e7e9ee; --muted:#9aa3b2; --line:#2a2f38; --accent:#6c9dfa; --err:#ff7b70; }
+  }
+  * { box-sizing:border-box; }
+  html, body { height:100%; margin:0; }
+  body { display:flex; flex-direction:column; background:var(--bg); color:var(--fg);
+         font:14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; padding:10px 16px;
+           border-bottom:1px solid var(--line); }
+  header strong { font-size:15px; }
+  #info { color:var(--muted); flex:1 1 280px; }
+  #info.error { color:var(--err); }
+  button { font:inherit; padding:6px 14px; border-radius:6px; border:1px solid var(--line);
+           background:transparent; color:var(--fg); cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button:disabled { opacity:.6; cursor:default; }
+  main { flex:1; position:relative; }
+  iframe { position:absolute; inset:0; width:100%; height:100%; border:0; background:#fff; }
+  #empty { padding:40px 16px; text-align:center; color:var(--muted); }
+</style>
+<script src="config.js"></script>
+</head>
+<body>
+<header>
+  <strong>Portfolio</strong>
+  <span id="info">Cargando…</span>
+  <button id="refresh" class="primary" disabled>Recalcular</button>
+  <button id="logout">Salir</button>
+</header>
+<main>
+  <div id="empty" hidden>Todavía no hay un dashboard generado. Tocá <b>Recalcular</b>.</div>
+  <iframe id="dashboard" title="Dashboard" hidden></iframe>
+</main>
+<script>
+(() => {
+  const C = window.PORTFOLIO_CONFIG;
+  const REDIRECT = location.origin + '/';
+  const store = sessionStorage;
+  const $ = id => document.getElementById(id);
+
+  // ---- login: OAuth authorization code + PKCE against Cognito managed login
+  const b64url = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const randomString = () => b64url(crypto.getRandomValues(new Uint8Array(32)));
+
+  async function login() {
+    const verifier = randomString(), state = randomString();
+    store.setItem('pkce_verifier', verifier);
+    store.setItem('pkce_state', state);
+    const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+    location.assign(`${C.cognitoDomain}/oauth2/authorize?` + new URLSearchParams({
+      response_type: 'code', client_id: C.clientId, redirect_uri: REDIRECT,
+      scope: 'openid email', state, code_challenge_method: 'S256', code_challenge: challenge,
+    }));
+  }
+
+  async function tokenRequest(params) {
+    const res = await fetch(`${C.cognitoDomain}/oauth2/token`, {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ client_id: C.clientId, ...params }),
+    });
+    if (!res.ok) throw new Error('login ' + res.status);
+    const t = await res.json();
+    store.setItem('access_token', t.access_token);
+    store.setItem('expires_at', String(Date.now() + (t.expires_in - 60) * 1000));
+    if (t.refresh_token) store.setItem('refresh_token', t.refresh_token);
+  }
+
+  async function accessToken() {
+    if (store.getItem('access_token') && Date.now() < Number(store.getItem('expires_at'))) {
+      return store.getItem('access_token');
+    }
+    const refresh = store.getItem('refresh_token');
+    if (refresh) {
+      try { await tokenRequest({ grant_type: 'refresh_token', refresh_token: refresh }); return store.getItem('access_token'); }
+      catch (e) { store.clear(); }
+    }
+    await login();
+    return new Promise(() => {});  // navigating away
+  }
+
+  async function handleCallback() {
+    const q = new URLSearchParams(location.search);
+    if (!q.has('code')) return;
+    history.replaceState(null, '', REDIRECT);
+    if (q.get('state') !== store.getItem('pkce_state')) throw new Error('estado de login inválido');
+    await tokenRequest({ grant_type: 'authorization_code', code: q.get('code'),
+                         redirect_uri: REDIRECT, code_verifier: store.getItem('pkce_verifier') });
+    store.removeItem('pkce_verifier'); store.removeItem('pkce_state');
+  }
+
+  function logout() {
+    store.clear();
+    location.assign(`${C.cognitoDomain}/logout?` + new URLSearchParams({ client_id: C.clientId, logout_uri: REDIRECT }));
+  }
+
+  // ---- API
+  async function api(method, path) {
+    const res = await fetch(C.apiUrl + path, { method, headers: { Authorization: 'Bearer ' + await accessToken() } });
+    if (res.status === 401) { store.clear(); await login(); }
+    const body = await res.json().catch(() => ({}));
+    return { status: res.status, body };
+  }
+
+  // ---- UI
+  const when = iso => iso ? new Date(iso).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+
+  function showInfo(status) {
+    const info = $('info'), d = status.dashboard;
+    const base = d ? `Generado ${d.generated_at} · planilla editada ${when(d.sheet_modified_at)}` : 'Sin dashboard todavía';
+    info.classList.toggle('error', status.state === 'error');
+    if (status.state === 'running') info.textContent = `Recalculando desde ${when(status.started_at)}… (puede tardar unos minutos)`;
+    else if (status.state === 'error') info.textContent = `Falló el último recálculo: ${status.error}. ${d ? 'Se muestra el anterior. ' + base : ''}`;
+    else info.textContent = base;
+    $('refresh').disabled = status.state === 'running';
+  }
+
+  async function loadDashboard() {
+    const { body } = await api('GET', '/dashboard');
+    showInfo(body.status);
+    $('empty').hidden = !!body.url;
+    $('dashboard').hidden = !body.url;
+    if (body.url) $('dashboard').src = body.url;
+    if (body.status.state === 'running') poll();
+  }
+
+  let polling = false;
+  async function poll() {
+    if (polling) return;
+    polling = true;
+    try {
+      for (;;) {
+        await new Promise(r => setTimeout(r, 3000));
+        const { body } = await api('GET', '/status');
+        showInfo(body);
+        if (body.state !== 'running') break;
+      }
+    } finally { polling = false; }
+    await loadDashboard();
+  }
+
+  async function refresh() {
+    $('refresh').disabled = true;
+    const { status, body } = await api('POST', '/refresh');
+    showInfo(body);
+    if (status === 202 || status === 409) poll();
+  }
+
+  $('refresh').addEventListener('click', () => refresh().catch(fail));
+  $('logout').addEventListener('click', logout);
+
+  function fail(e) {
+    $('info').classList.add('error');
+    $('info').textContent = 'Error: ' + e.message;
+    $('refresh').disabled = false;
+  }
+
+  handleCallback().then(loadDashboard).catch(fail);
+})();
+</script>
+</body>
+</html>

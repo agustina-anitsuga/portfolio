@@ -25,8 +25,12 @@ class DashboardPayload:
             "fx_rate": self._snapshot.fx.value,
             "fx_source": self._snapshot.fx.source,
             "contribution": self._snapshot.contribution,
-            "generated_at": self._now.strftime("%Y-%m-%d %H:%M"),
+            "generated_at": self.generated_at,
         }
+
+    @property
+    def generated_at(self):
+        return self._now.strftime("%Y-%m-%d %H:%M")
 
     def _market(self, market):
         report = self._snapshot.report(market.key)

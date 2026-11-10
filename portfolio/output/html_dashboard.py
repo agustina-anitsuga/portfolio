@@ -20,6 +20,10 @@ class HtmlDashboard:
     def __init__(self, snapshot, now=None):
         self._payload = DashboardPayload(snapshot, now)
 
+    @property
+    def generated_at(self):
+        return self._payload.generated_at
+
     def render(self):
         page = self._asset("dashboard.html")
         page = page.replace("__STYLES__", self._asset("dashboard.css"))

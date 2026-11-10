@@ -20,3 +20,7 @@ portfolio.xlsx
 
 # pytest
 .pytest_cache/
+
+# AWS build
+.aws-build/
+aws/.aws-sam/

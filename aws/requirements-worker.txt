@@ -1,0 +1,13 @@
+# Dependencies of the worker Lambda, installed as Linux wheels by build.sh.
+# boto3 is not listed: the Lambda runtime already ships it.
+openpyxl>=3.1
+yfinance
+google-auth>=2.20
+requests
+requests-toolbelt
+# runtime deps of ppi-client / signalrcorePPI (those two have no wheels and
+# declare test tools as dependencies, so build.sh installs them with --no-deps)
+msgpack
+websocket-client
+# keep botocore (in the runtime) happy: it requires python-dateutil < 3
+python-dateutil<3
