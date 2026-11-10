@@ -63,6 +63,50 @@ export PPI_PRIVATE_KEY=""
 
 Sin credenciales el script igual corre: usa los fallbacks de precio.
 
+## Planilla en Google Drive
+
+Si no se pasa la ruta de un `.xlsx`, el script lee la planilla directamente de
+Google Drive (un Google Sheet con las mismas hojas). Asi se puede anotar una
+compra desde el celular y despues regenerar el dashboard sin bajar nada.
+
+La lectura usa una **cuenta de servicio** de Google Cloud con permiso de solo
+lectura, que ve unicamente los archivos compartidos con ella. **No hace falta
+clave JSON** (muchas organizaciones bloquean crearlas): tu usuario "actua como"
+la cuenta de servicio mediante Application Default Credentials (ADC).
+
+Una sola vez:
+
+1. En [console.cloud.google.com](https://console.cloud.google.com/), en tu
+   proyecto, habilita la **Google Drive API** y la **IAM Service Account
+   Credentials API** (APIs y servicios → Biblioteca).
+2. IAM y administracion → Cuentas de servicio → Crear. No hace falta darle
+   roles en el proyecto.
+3. En esa cuenta de servicio → Permisos → Otorgar acceso: tu email, con el rol
+   **Creador de tokens de cuenta de servicio**
+   (`roles/iam.serviceAccountTokenCreator`).
+4. Abri la planilla en Google Sheets → Compartir → agrega el email de la cuenta
+   de servicio (`...@<proyecto>.iam.gserviceaccount.com`) como **Lector**.
+5. Instala la CLI de Google Cloud (`brew install --cask google-cloud-sdk`) y
+   genera las credenciales locales:
+
+```bash
+gcloud auth application-default login \
+  --impersonate-service-account=<email de la cuenta de servicio>
+```
+
+6. Defini el ID de la planilla (el que aparece en su URL):
+
+```bash
+export PORTFOLIO_SHEET_ID="<ID de la planilla>"
+```
+
+`--sheet-id` pisa `PORTFOLIO_SHEET_ID` para una corrida puntual. Al terminar,
+el resumen muestra cuando se edito la planilla por ultima vez.
+
+Si en algun entorno si se dispone de una clave JSON, se puede usar igual con
+`GOOGLE_SERVICE_ACCOUNT_FILE` (ruta) o `GOOGLE_SERVICE_ACCOUNT_JSON`
+(contenido); si ninguna esta definida se usa ADC.
+
 ### Orden de fallback de precios
 
 1. PPI en vivo.
@@ -75,7 +119,8 @@ Sin credenciales el script igual corre: usa los fallbacks de precio.
 ## Uso
 
 ```bash
-python3 generate_dashboard.py portfolio.xlsx --out-html portfolio.html
+python3 generate_dashboard.py --out-html portfolio.html                 # planilla de Google Drive
+python3 generate_dashboard.py portfolio.xlsx --out-html portfolio.html  # archivo local
 ```
 
 ## Archivos

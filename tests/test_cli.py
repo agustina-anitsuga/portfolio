@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+import datetime as dt
+from contextlib import contextmanager
+
 import openpyxl
 import pytest
 
@@ -8,12 +11,13 @@ from portfolio.market import Market
 from portfolio.marketdata.fx_rate import FxRate
 from portfolio.portfolio.market_report import MarketReport
 from portfolio.portfolio.snapshot import PortfolioSnapshot
+from portfolio.settings import Settings
 
 
 class FakeApp:
     """Stands in for PortfolioApp: no spreadsheet and no market involved."""
 
-    def __init__(self):
+    def __init__(self, settings=None):
         self.asked_for = []
         self.watchlist_requested = []
         self.annual_requested = []
@@ -105,10 +109,42 @@ def test_the_html_output_has_a_default_name(tmp_path, monkeypatch, cli, capsys):
     assert (tmp_path / "Portfolio Dashboard.html").exists()
 
 
-def test_the_spreadsheet_path_is_required(cli):
-    dashboard, _ = cli
-    with pytest.raises(SystemExit):
-        dashboard.run([])
+class FakeSheet:
+    """Stands in for GoogleSheet: hands out a fixed path, no network."""
+
+    def __init__(self):
+        self.modified_time = dt.datetime(2026, 11, 10, 14, 32)
+        self.downloads = 0
+
+    @contextmanager
+    def downloaded(self):
+        self.downloads += 1
+        yield "/tmp/drive-export.xlsx"
+
+
+def test_without_a_path_the_spreadsheet_comes_from_drive(tmp_path, capsys):
+    app, sheet = FakeApp(), FakeSheet()
+    DashboardCli(app=app, settings=Settings(), sheet=sheet).run(
+        ["--out-html", str(tmp_path / "d.html")])
+    assert sheet.downloads == 1
+    assert app.asked_for == ["/tmp/drive-export.xlsx"]
+    assert "editada el 10/11/2026 14:32" in capsys.readouterr().out
+
+
+def test_a_local_path_never_touches_drive(tmp_path, capsys):
+    app, sheet = FakeApp(), FakeSheet()
+    DashboardCli(app=app, settings=Settings(), sheet=sheet).run(
+        ["portfolio.xlsx", "--out-html", str(tmp_path / "d.html")])
+    assert sheet.downloads == 0
+    assert "Google Drive" not in capsys.readouterr().out
+
+
+def test_drive_without_configuration_fails_with_a_clear_message(tmp_path, capsys):
+    out = tmp_path / "d.html"
+    code = DashboardCli(app=FakeApp(), settings=Settings()).run(["--out-html", str(out)])
+    assert code == 1
+    assert "PORTFOLIO_SHEET_ID" in capsys.readouterr().err
+    assert not out.exists()
 
 
 def test_main_builds_the_real_app_by_default(tmp_path, monkeypatch, capsys):

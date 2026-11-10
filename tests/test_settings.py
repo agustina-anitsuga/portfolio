@@ -35,3 +35,13 @@ def test_attempts_is_never_below_one():
     assert Settings(retries=0).attempts == 1
     assert Settings(retries=-3).attempts == 1
     assert Settings(retries=4).attempts == 4
+
+
+def test_reads_the_google_drive_configuration():
+    settings = Settings.from_env({
+        "PORTFOLIO_SHEET_ID": "abc", "GOOGLE_SERVICE_ACCOUNT_FILE": "/k.json",
+        "GOOGLE_SERVICE_ACCOUNT_JSON": "{}",
+    })
+    assert settings.sheet_id == "abc"
+    assert settings.google_service_account_file == "/k.json"
+    assert settings.google_service_account_json == "{}"

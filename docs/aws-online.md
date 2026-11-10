@@ -6,17 +6,21 @@ sin dejar una maquina prendida y con las credenciales de PPI fuera del HTML.
 ## Resumen de la propuesta
 
 Servicios administrados y sin servidores: **S3 + CloudFront** para la pagina,
-**Lambda** para calcular, **Secrets Manager** para las claves de PPI y
-**Cognito** para el login. El costo esperable para uso personal son centavos por
+**Lambda** para calcular, **Secrets Manager** para las claves de PPI,
+**Cognito** para el login y **Google Drive** como fuente de datos: la planilla
+vive en Drive como Google Sheet, se edita desde el celular al comprar y la Lambda
+la lee en cada recalculo. El costo esperable para uso personal son centavos por
 mes (todo entra en la capa gratuita salvo Secrets Manager, ~0,40 USD/mes).
 
 ```
 Navegador ──► CloudFront ──► S3 (HTML + JS estaticos)
     │  login (Cognito)
     └──► API Gateway (HTTP API, JWT) ──► Lambda "refresh"  ──► PPI / Yahoo
+                                    │          └──► Drive API (export .xlsx de la planilla)
                                     └──► Lambda "data"     ──► S3 (latest.json)
-                         S3: portfolio.xlsx (versionado) · cache de precios historicos
-                         Secrets Manager: PPI_PUBLIC_KEY / PPI_PRIVATE_KEY
+                         Google Drive: planilla "portfolio" (Google Sheet, historial de versiones)
+                         S3: latest.json · cache de precios historicos
+                         Secrets Manager: claves de PPI · Google: Workload Identity Federation (sin claves)
                          EventBridge Scheduler: refresh automatico en horario de mercado
 ```
 
@@ -51,24 +55,73 @@ eso `--no-annual` deja de hacer falta.
 
 1. `POST /refresh` → API Gateway → Lambda `refresh` (invocacion asincrona,
    responde `202` enseguida).
-2. La Lambda lee `portfolio.xlsx` de S3, pide precios, calcula el snapshot y
-   escribe `latest.json` en S3 (con la hora de calculo).
+2. La Lambda exporta la planilla de Drive como `.xlsx` a `/tmp`, pide precios,
+   calcula el snapshot y escribe `latest.json` en S3 (con la hora de calculo y
+   el `modifiedTime` de la planilla).
 3. El navegador consulta `GET /data` cada 2-3 s (o mira `generated_at`) y repinta
    las tablas cuando cambia.
 4. Si ya hay un calculo en curso, el boton lo informa en vez de lanzar otro.
 
 ### Donde vive cada cosa
 
-- **`portfolio.xlsx`**: bucket S3 privado con versionado. Se sigue editando en
-  Excel y se sube con `aws s3 cp portfolio.xlsx s3://<bucket>/portfolio.xlsx`
-  (un `make publish` lo resuelve). El versionado deja volver atras si se sube
-  algo roto.
-- **Claves de PPI**: Secrets Manager, leidas por la Lambda en tiempo de ejecucion.
-  Nunca van en el HTML, en variables de entorno de la consola ni en el repo.
+- **Planilla**: en Google Drive, ver la seccion siguiente.
+- **Claves de PPI y de Google**: Secrets Manager, leidas por la Lambda en tiempo
+  de ejecucion. Nunca van en el HTML, en variables de entorno de la consola ni en
+  el repo. Google no necesita secreto (ver Workload Identity Federation abajo).
 - **Cache de precios historicos**: S3 (`cache/closes.json`) o una tabla DynamoDB
   on-demand.
 - **Pagina**: `index.html` + JS/CSS en S3, servidos por CloudFront con acceso
   restringido al bucket (OAC).
+
+### Planilla en Google Drive
+
+El flujo buscado es: comprar → anotar la operacion en la planilla desde el
+celular → entrar a la web → "Recalcular". Para eso la fuente de datos deja de ser
+un archivo que hay que subir y pasa a vivir en Drive.
+
+**Formato: Google Sheet nativo (recomendado).** Se importa `portfolio.xlsx` una
+vez a Google Sheets y desde ahi se edita en la app o la web. La Lambda lo pide con
+`GET /drive/v3/files/{id}/export?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+y recibe un `.xlsx` con los valores de las formulas ya calculados por Google, que
+es lo que necesita `openpyxl.load_workbook(path, data_only=True)`. Los nombres de
+las hojas se conservan, asi que `PortfolioWorkbook` no cambia.
+
+> Alternativa: dejar el `.xlsx` tal cual en Drive (editado con Excel via Drive
+> para escritorio, o en Sheets en modo compatible con Office) y bajarlo con
+> `GET /drive/v3/files/{id}?alt=media`. Funciona igual del lado de la Lambda,
+> pero editar desde el celular es mas incomodo.
+
+**Acceso: cuenta de servicio de Google Cloud, sin claves JSON.** Crear claves
+suele estar bloqueado por politica (`iam.disableServiceAccountKeyCreation`), y
+ademas es mejor no tenerlas. La cuenta de servicio tiene la planilla compartida
+como **lector** y se usa sin clave en los dos entornos:
+- **Local:** tu usuario la impersona con
+  `gcloud auth application-default login --impersonate-service-account=<email>`
+  (necesitas `roles/iam.serviceAccountTokenCreator` sobre ella).
+- **AWS:** **Workload Identity Federation** con un pool y un provider de tipo
+  AWS. Google confia en el rol IAM de la Lambda y le entrega tokens de la
+  cuenta de servicio; el archivo de configuracion (sin secretos) se genera con
+  `gcloud iam workload-identity-pools create-cred-config ... --aws` y se apunta
+  con `GOOGLE_APPLICATION_CREDENTIALS`. Asi tampoco hace falta guardar nada de
+  Google en Secrets Manager.
+
+El codigo usa `google.auth.default(scopes=[drive.readonly])`, que resuelve los
+dos casos sin cambios.
+
+Con eso la Lambda solo ve los archivos que se le compartieron explicitamente, no
+el resto del Drive, y no puede modificar nada.
+
+**Detalles:**
+- El ID de la planilla va como variable de entorno de la Lambda (`SHEET_ID`); no
+  es secreto, el acceso lo da el permiso de compartir.
+- La respuesta de `files.get?fields=modifiedTime` se guarda en `latest.json` y la
+  pagina muestra "planilla editada a las 14:32", para saber si el calculo ya
+  incluye la ultima compra.
+- Bajar la planilla agrega ~1-2 s al recalculo.
+- El historial de versiones de Google Sheets reemplaza al versionado de S3 para
+  volver atras si se rompe algo.
+- Antes de migrar, verificar que todas las formulas de la planilla den lo mismo
+  en Sheets que en Excel (sobre todo funciones poco comunes o formatos de fecha).
 
 ### Login
 
@@ -87,17 +140,23 @@ bien se sirve todo desde la API y se omite CloudFront.
    exponerlo como `latest.json` y hacer que el HTML lo pida con `fetch` en vez de
    llevarlo incrustado (hoy `__DATA_JSON__`). Se mantiene el modo "archivo
    suelto" como opcion de la CLI.
-2. **Entrada para Lambda** (`handler.py`): descarga el xlsx a `/tmp`, arma
-   `PortfolioApp`, corre el camino rapido o el lento y sube el resultado.
-3. **Camino rapido real.** Hoy `PortfolioApp.snapshot` hace todo junto. Agregar un
+2. **Entrada para Lambda** (`handler.py`): exporta la planilla de Drive a
+   `/tmp/portfolio.xlsx`, arma `PortfolioApp`, corre el camino rapido o el lento
+   y sube el resultado.
+3. **Lector de Drive**: con ADC (impersonacion local, Workload Identity
+   Federation en AWS) obtiene un token, exporta la planilla y devuelve la ruta
+   local y el `modifiedTime`. **Hecho:** `portfolio/sources/google_sheet.py`
+   (`GoogleSheet`); la CLI lee de Drive cuando no se le pasa un `.xlsx`.
+4. **Camino rapido real.** Hoy `PortfolioApp.snapshot` hace todo junto. Agregar un
    parametro para reutilizar tendencia, watchlist y analytics de bonos de la
    ultima corrida lenta, y refrescar solo precio y MEP.
-4. **Cache persistente** de `HistoricalPrices` (la clase ya cachea en memoria; hay
+5. **Cache persistente** de `HistoricalPrices` (la clase ya cachea en memoria; hay
    que volcarla a S3/DynamoDB).
-5. **Credenciales desde Secrets Manager** en vez de `PPI_PUBLIC_KEY` /
+6. **Credenciales desde Secrets Manager** en vez de `PPI_PUBLIC_KEY` /
    `PPI_PRIVATE_KEY` del entorno (`Settings.from_env` se puede reemplazar por un
-   `Settings.from_secrets`).
-6. **Boton y polling** en el JS.
+   `Settings.from_secrets`, que tambien devuelva la clave de Google).
+7. **Boton y polling** en el JS, y la hora de edicion de la planilla en la
+   cabecera.
 
 ## Infraestructura como codigo
 
@@ -108,6 +167,9 @@ permisos minimos (la Lambda solo puede leer ese bucket y ese secreto).
 
 ## Riesgos y cosas a verificar antes de construir
 
+- **Planilla en Sheets.** Que la exportacion a `.xlsx` lea igual que el archivo
+  de hoy: correr la CLI local contra el export y comparar el resultado con el
+  generado desde `portfolio.xlsx`.
 - **PPI desde Lambda.** Hay que confirmar que PPI acepta el login desde IPs de AWS
   y como se comporta su limite de pedidos con corridas programadas. Es lo primero
   a probar.
@@ -122,8 +184,12 @@ permisos minimos (la Lambda solo puede leer ese bucket y ese secreto).
 
 ## Plan por etapas
 
+0. **Planilla a Drive (1-2 h):** importar `portfolio.xlsx` a Google Sheets,
+   crear la cuenta de servicio, compartirle la planilla, impersonarla con ADC y probar el export desde
+   la CLI local (sin pasarle un `.xlsx`) comparando contra el archivo actual.
 1. **Prueba de viabilidad (medio dia):** una Lambda con la imagen que corra el
-   calculo actual desde S3 y deje `latest.json`. Verifica PPI y Yahoo desde AWS.
+   calculo actual leyendo la planilla de Drive y deje `latest.json`. Verifica
+   PPI, Yahoo y Drive desde AWS.
 2. **Pagina online (1 dia):** `fetch` del JSON, S3 + CloudFront, login con Cognito.
 3. **A demanda (1 dia):** `/refresh` asincrono, boton con polling, camino rapido.
 4. **Automatico (medio dia):** EventBridge en horario de mercado (lun-vie ~11-17 h
@@ -134,7 +200,8 @@ permisos minimos (la Lambda solo puede leer ese bucket y ese secreto).
 | Servicio | Mensual |
 |---|---|
 | Lambda, API Gateway, S3, CloudFront, Cognito, EventBridge | capa gratuita |
-| Secrets Manager (1 secreto) | ~0,40 USD |
+| Secrets Manager (1 secreto, PPI) | ~0,40 USD |
+| Google Drive API | gratis |
 | ECR (imagen ~1 GB) | ~0,10 USD |
 | **Total** | **< 1 USD** |
 
