@@ -34,7 +34,7 @@ class SnapshotBuilder:
         return PortfolioSnapshot(
             reports=reports,
             reports_by_year=reports_by_year,
-            annual=self._annual(reports_by_year),
+            annual=self._annual(),
             fx=self._fx,
             transactions=TransactionLedger(self._workbook.all_transactions(), reports).rows(),
             watchlist=self._watched_rows(),
@@ -42,11 +42,11 @@ class SnapshotBuilder:
             contribution=ContributionPlan(self._workbook.contribution, self._ccl).as_dict(),
         )
 
-    def _annual(self, reports_by_year):
+    def _annual(self):
         """Needs historical prices; without them the tab is simply empty."""
         if self._history is None:
             return []
-        return AnnualSummary(reports_by_year, self._history).rows()
+        return AnnualSummary(self._workbook, self._prices, self._fx, self._history).rows()
 
     def _watched_rows(self):
         """La watchlist no tiene posiciones: son instrumentos que se siguen sin

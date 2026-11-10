@@ -42,6 +42,15 @@ class Position:
         return not self.approximated
 
     @property
+    def held_units(self):
+        """Units actually held after every trade walked so far."""
+        return max(self._real_units, 0.0)
+
+    def held_cost(self, currency):
+        """Cost (at real average cost) of the units actually held."""
+        return self._real_cost[currency] if self._real_units > EPSILON else 0.0
+
+    @property
     def is_empty(self):
         return self.units <= EPSILON and self.units_sold <= EPSILON
 

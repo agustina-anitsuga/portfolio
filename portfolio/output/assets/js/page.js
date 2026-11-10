@@ -15,7 +15,7 @@ function buildPage(marketKey) {
   }
 
   if (marketKey === 'annual') {
-    html += `<div class="approx-note">Cada año muestra lo que operaste en ese año (click en un año para ver el detalle por instrumento). <strong>Compras</strong>: lo comprado. <strong>Invertido Neto</strong>: compras menos el costo de lo vendido ese año. <strong>Valor al Cierre</strong>: ese neto valuado al ultimo cierre del año (el año en curso usa el precio de hoy); queda vacio si falta algun precio historico. <strong>P&L a la Fecha</strong>: valor actual de ese neto contra lo invertido, sin contar ventas realizadas.</div>`;
+    html += `<div class="approx-note">Cada año es el portfolio completo al 31/12 de ese año (click en un año para ver el detalle por instrumento). <strong>Base Inicial</strong>: lo que valia el portfolio al cierre del año anterior (invertido + P&L no realizado a esa fecha). <strong>Aporte</strong>: lo comprado en el año; <strong>Aporte Neto</strong> descuenta lo que ingreso por ventas. <strong>P&L No Realizado</strong>: valor al cierre contra el costo de lo que se tenia al 31/12 (el año en curso usa el precio de hoy). <strong>P&L Realizado</strong>: resultado de las ventas de ese año. <strong>Resultado del Año</strong>: Valor al Cierre − Base Inicial − Aporte Neto (= variacion del no realizado + realizado); el % es sobre Base Inicial + Compras. Queda vacio si falta algun precio historico.</div>`;
     html += `<div class="toolbar">
       <select data-role="currency" data-market="${marketKey}">
         <option value="ars" ${defaultCurrency==='ars'?'selected':''}>Moneda: ARS</option>

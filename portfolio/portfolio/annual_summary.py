@@ -1,95 +1,123 @@
 # -*- coding: utf-8 -*-
-"""The rows of the "Anual" tab: one per year with purchases."""
+"""The rows of the "Anual" tab: one per calendar year, chained."""
 
 import datetime as dt
 
-from ..market import CURRENCIES
+from ..market import CURRENCIES, Market
 from .position import EPSILON
+from .position_tracker import PositionTracker
+
+# Figures that can be missing (they need a closing price). The rest come
+# straight from the trades and are always there.
+NULLABLE = ("base_value", "close_value", "unrealized", "result")
+ALWAYS = ("bought", "sold", "net_contribution", "realized", "invested")
 
 
 class AnnualSummary:
-    """What the trades of each year turned into.
+    """The whole portfolio, year by year, as it stood at each 31/12.
 
     Per year and currency:
-    - invested_gross: what was bought that year.
-    - invested_net: the same minus the cost of what was sold that year (the
-      "Invertido" of the year filter).
-    - close_value: that net position valued at the last close of the year.
-      None when a price or the exchange rate of that day is missing: a partial
-      total would look real, so it is left empty and `close_missing` says how
-      many positions could not be valued.
-    - year_pct: close_value against invested_net.
-    - gain / gain_pct: today's value of that net position against invested_net.
+    - base_value: what the portfolio was worth at the close of the previous
+      year (its invested amount plus its unrealized P&L at that date). It is
+      the starting point of the year.
+    - bought / sold: what was bought that year, and what the sales of that year
+      brought in. net_contribution = bought - sold.
+    - realized: P&L of the sales of that year, against the real average cost.
+    - invested: cost of the units still held at the close of the year.
+    - close_value: those units at the last close of the year (the current year
+      uses today's price). None when a price or that day's exchange rate is
+      missing -- a partial total would look real -- and `close_missing` says
+      how many positions could not be valued.
+    - unrealized: close_value - invested, i.e. the unrealized P&L at 31/12.
+    - result: close_value - base_value - net_contribution, which is the change
+      in unrealized P&L during the year plus the realized P&L.
+    - result_pct: result over what was at stake (base_value + bought).
     - detail: the same figures per instrument, for the expandable year row.
-
-    The current year has no close yet, so its "close" is today's value.
     """
 
-    def __init__(self, reports_by_year, history, today=None):
-        self._reports_by_year = reports_by_year
+    def __init__(self, workbook, prices, fx, history, today=None):
+        self._workbook = workbook
+        self._prices = prices
+        self._fx = fx
         self._history = history
         self._today = today or dt.date.today()
 
     def rows(self):
-        return [self._row(year, reports) for year, reports in
-                sorted(self._reports_by_year.items(), reverse=True)]
+        rows, previous = [], {}
+        for year in self._years():
+            details = self._details(year, previous)
+            previous = {(d["market"], d["key"]): d for d in details}
+            rows.append(self._row(year, details))
+        return list(reversed(rows))
 
-    def _row(self, year, reports):
-        holdings = [h for report in reports.values() for h in report.holdings]
-        row = {"year": year, "positions": len(holdings),
-               "close_missing": max((self._missing(year, holdings, c) for c in CURRENCIES), default=0)}
-        row["detail"] = [self._detail(year, h) for h in holdings]
+    def _years(self):
+        years = {int(tx.year) for market in Market.all()
+                 for tx in self._workbook.transactions(market) if tx.op and tx.year}
+        if not years:
+            return []
+        return [str(y) for y in range(min(years), max(max(years), self._today.year) + 1)]
+
+    def _details(self, year, previous):
+        positions = PositionTracker(self._fx, scope_year=year, until_year=year).track_all(self._workbook)
+        details = []
+        for market in Market.all():
+            for ticker, position in positions[market.key].items():
+                before = previous.get((market.key, ticker))
+                held = position.held_units > EPSILON
+                traded = position.units_bought > EPSILON or position.units_sold > EPSILON
+                if held or traded or before:
+                    details.append(self._detail(year, market, ticker, position, before))
+        return details
+
+    def _detail(self, year, market, ticker, position, before):
+        instrument = self._workbook.instrument(ticker)
+        units = position.held_units
+        row = {"key": ticker, "market": market.key, "name": instrument.name, "units": units}
         for currency in CURRENCIES:
-            row.update(self._figures(year, holdings, currency))
+            price = self._price(year, market, instrument, currency) if units > EPSILON else None
+            invested = position.held_cost(currency)
+            close = (price * units if price is not None else None) if units > EPSILON else 0.0
+            base = before[f"close_value_{currency}"] if before else 0.0
+            bought = position.cost_bought[currency]
+            sold = position.income_from_sales[currency]
+            row.update(_figures(currency, {
+                "base_value": base, "bought": bought, "sold": sold,
+                "net_contribution": bought - sold,
+                "realized": sold - position.cost_of_sales[currency],
+                "invested": invested, "close_value": close,
+                "unrealized": None if close is None else close - invested,
+                "result": None if (close is None or base is None) else close - base - (bought - sold),
+            }))
+            row[f"close_price_{currency}"] = price
         return row
 
-    def _detail(self, year, holding):
-        """The same figures for one instrument: what the year row is made of."""
-        row = {"key": holding.instrument.key, "market": holding.market.key,
-               "name": holding.instrument.name, "units": holding.units,
-               "units_bought": holding.position.units_bought}
+    def _row(self, year, details):
+        row = {"year": year, "positions": sum(1 for d in details if d["units"] > EPSILON),
+               "detail": details,
+               "close_missing": max((sum(1 for d in details if d[f"close_value_{c}"] is None)
+                                     for c in CURRENCIES), default=0)}
         for currency in CURRENCIES:
-            row.update(self._figures(year, [holding], currency))
-            row[f"close_price_{currency}"] = self._holding_price(year, holding, currency)
+            totals = {k: sum(d[f"{k}_{currency}"] for d in details) for k in ALWAYS}
+            for k in NULLABLE:
+                values = [d[f"{k}_{currency}"] for d in details]
+                totals[k] = None if any(v is None for v in values) else sum(values)
+            row.update(_figures(currency, totals))
         return row
 
-    def _figures(self, year, holdings, currency):
-        gross = sum(h.position.cost_bought[currency] for h in holdings)
-        net = sum(h.metrics[currency].invested for h in holdings)
-        values = [h.metrics[currency].value for h in holdings]
-        value_now = None if any(v is None for v in values) else sum(values)
-        close = self._close_value(year, holdings, currency)
-        return {
-            f"invested_gross_{currency}": gross,
-            f"invested_net_{currency}": net,
-            f"close_value_{currency}": close,
-            f"year_pct_{currency}": _pct(close, net),
-            f"gain_{currency}": None if value_now is None else value_now - net,
-            f"gain_pct_{currency}": None if value_now is None else _pct(value_now, net),
-        }
-
-    def _close_value(self, year, holdings, currency):
-        closes = [self._holding_close(year, h, currency) for h in holdings if h.units > EPSILON]
-        return None if any(c is None for c in closes) else sum(closes)
-
-    def _missing(self, year, holdings, currency):
-        return sum(1 for h in holdings
-                   if h.units > EPSILON and self._holding_close(year, h, currency) is None)
-
-    def _holding_close(self, year, holding, currency):
-        price = self._holding_price(year, holding, currency)
-        return None if price is None else price * holding.units
-
-    def _holding_price(self, year, holding, currency):
+    def _price(self, year, market, instrument, currency):
         """Price of one unit at the close of the year. For a Cedear that is the
         price of the Cedear itself (what PPI quotes and what the units are
         counted in), so the ratio is already inside it."""
         if int(year) >= self._today.year:
-            return holding.quote.price(currency)
+            return self._prices.quote(market, instrument).price(currency)
         date = dt.date(int(year), 12, 31)
-        price = self._history.close(holding.market, holding.instrument, date)
-        return self._history.convert(price, holding.market.native_currency, currency, date)
+        price = self._history.close(market, instrument, date)
+        return self._history.convert(price, market.native_currency, currency, date)
 
 
-def _pct(value, base):
-    return ((value - base) / base * 100) if (value is not None and base) else None
+def _figures(currency, values):
+    row = {f"{k}_{currency}": v for k, v in values.items()}
+    result, base = values["result"], values["base_value"]
+    stake = None if base is None else base + values["bought"]
+    row[f"result_pct_{currency}"] = (result / stake * 100) if (result is not None and stake) else None
+    return row

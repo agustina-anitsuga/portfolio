@@ -19,11 +19,15 @@ class PositionTracker:
     `scope_year` does not filter the history: it is walked in full anyway, and
     only the trades of that year are reported. That is why the numbers of each
     year add up exactly to the total portfolio.
+
+    `until_year` cuts the history: trades after that year are ignored, so the
+    real state of each position is the one at the close of that year.
     """
 
-    def __init__(self, fx, scope_year=None):
+    def __init__(self, fx, scope_year=None, until_year=None):
         self._fx = fx
         self._scope_year = scope_year
+        self._until_year = until_year
 
     def track_all(self, workbook):
         return {market.key: self.track(workbook.transactions(market)) for market in Market.all()}
@@ -32,6 +36,8 @@ class PositionTracker:
         positions = {}
         for tx in transactions:
             if not tx.op or tx.units is None:
+                continue
+            if self._until_year and tx.year and int(tx.year) > int(self._until_year):
                 continue
             position = positions.setdefault(tx.ticker, Position())
             self._apply(position, tx)

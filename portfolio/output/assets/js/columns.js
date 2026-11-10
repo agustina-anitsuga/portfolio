@@ -37,21 +37,23 @@ const COLUMNS_DUAL = [
   {key:'realized_pct', label:'P&L Realiz. %', num:true, pl:true, pct:true, dual:true},
 ];
 
-// "Anual" tab: one row per year with purchases. Each year is its own scope
-// (the same one the year filter uses): what was bought that year, gross and
-// net of what was sold that year, what that net position was worth at the
-// close of the year, and what it is worth today.
+// "Anual" tab: one row per calendar year, chained. Each year starts from what
+// the portfolio was worth at the close of the previous one (invested +
+// unrealized P&L at 31/12), adds what was contributed, and ends at the value
+// at its own close.
 const ANNUAL_COLUMNS = [
   {key:'year', label:'Año'},
-  {key:'units_bought', label:'Unid. Compradas', num:true},
   {key:'units', label:'Unid. al Cierre', num:true},
-  {key:'invested_gross', label:'Compras', num:true, dual:true},
-  {key:'invested_net', label:'Invertido Neto', num:true, dual:true},
-  {key:'close_price', label:'Precio al Cierre', num:true, dual:true},
+  {key:'base_value', label:'Base Inicial', num:true, dual:true},
+  {key:'bought', label:'Aporte (Compras)', num:true, dual:true},
+  {key:'sold', label:'Ventas', num:true, dual:true},
+  {key:'net_contribution', label:'Aporte Neto', num:true, dual:true},
+  {key:'invested', label:'Invertido al Cierre', num:true, dual:true},
+  {key:'unrealized', label:'P&L No Realizado', num:true, pl:true, dual:true},
+  {key:'realized', label:'P&L Realizado', num:true, pl:true, dual:true},
   {key:'close_value', label:'Valor al Cierre', num:true, dual:true},
-  {key:'year_pct', label:'P&L % del Año', num:true, pl:true, pct:true, dual:true},
-  {key:'gain', label:'P&L $ a la Fecha', num:true, pl:true, dual:true},
-  {key:'gain_pct', label:'P&L % a la Fecha', num:true, pl:true, pct:true, dual:true},
+  {key:'result', label:'Resultado del Año', num:true, pl:true, dual:true},
+  {key:'result_pct', label:'Resultado %', num:true, pl:true, pct:true, dual:true},
 ];
 
 // Only bonds have these: they come from PPI's bond calculator. TIR, parity and

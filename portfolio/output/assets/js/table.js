@@ -29,15 +29,11 @@ function annualRows() {
     for (const c of ['ars', 'usd']) {
       const sum = key => detail.reduce((s, d) => s + d[`${key}_${c}`], 0);
       const all = key => detail.every(d => d[`${key}_${c}`] !== null);
-      const net = sum('invested_net');
-      const close = all('close_value') ? sum('close_value') : null;
-      const gain = all('gain') ? sum('gain') : null;
-      row[`invested_gross_${c}`] = sum('invested_gross');
-      row[`invested_net_${c}`] = net;
-      row[`close_value_${c}`] = close;
-      row[`year_pct_${c}`] = (close !== null && net) ? (close - net) / net * 100 : null;
-      row[`gain_${c}`] = gain;
-      row[`gain_pct_${c}`] = (gain !== null && net) ? gain / net * 100 : null;
+      for (const k of ['bought', 'sold', 'net_contribution', 'realized', 'invested']) row[`${k}_${c}`] = sum(k);
+      for (const k of ['base_value', 'close_value', 'unrealized', 'result']) row[`${k}_${c}`] = all(k) ? sum(k) : null;
+      const result = row[`result_${c}`], base = row[`base_value_${c}`];
+      const stake = base === null ? null : base + row[`bought_${c}`];
+      row[`result_pct_${c}`] = (result !== null && stake) ? result / stake * 100 : null;
     }
     return row;
   }).filter(r => r.detail.length);
@@ -65,7 +61,7 @@ function renderAnnualRows(rows, cols, currency) {
     const head = `<tr class="row-link" data-year="${r.year}">${cols.map(c => annualCellHtml(r, c, currency)).join('')}</tr>`;
     if (!open) return head;
     const detail = [...r.detail]
-      .sort((a, b) => (b[`invested_net_${currency}`] || 0) - (a[`invested_net_${currency}`] || 0))
+      .sort((a, b) => (b[`close_value_${currency}`] || b[`bought_${currency}`] || 0) - (a[`close_value_${currency}`] || a[`bought_${currency}`] || 0))
       .map(d => `<tr class="detail-row">${cols.map(c => annualCellHtml(d, c, currency)).join('')}</tr>`);
     return head + detail.join('');
   }).join('');
